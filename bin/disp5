@@ -1,0 +1,51 @@
+#!/usr/bin/env node
+var d = require("../src");
+var fs = require("fs");
+var rl = require('readline');
+var cmd = process.argv[2];
+var arg1 = process.argv[3];
+for(var i=4; i< process.argv.length; i++){
+	arg1+=" "+process.argv[i];
+}
+var env = {
+	username: process.env.USER,
+	lang: "disp"
+}
+switch(cmd){
+	case "run":
+	var str = fs.readFileSync(arg1).toString();
+	env.src = str;
+	d(env);
+	break;
+
+	case "exec":
+	env.src = arg1;
+	d(env);
+	break;	
+
+	case "help":
+	console.log("Basic usage: disp run [file]");
+	break;
+	case "shell":
+	default:
+		shell(env);
+}
+function shell(env){
+	ask(env, function(str){
+		var result = d(str);
+		if(result)
+			process.exit();
+		else
+			shell(env);
+	})
+}
+function ask(env, cb) {
+  var r = rl.createInterface({
+    input: process.stdin,
+    output: process.stdout});
+  r.question(env.username+"@"+ env.lang+ ">", function(answer) {
+    r.close();
+		cb(answer);
+  });
+}
+
