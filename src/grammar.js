@@ -9,9 +9,12 @@ var grammar = {
       "int": "-?(?:[0-9]|[1-9][0-9]+)",
       "exp": "(?:[eE][-+]?[0-9]+)",
       "frac": "(?:\\.[0-9]+)",
-			"sp": "[ \\t]*"
+			"sp": "[ \\t]*",
+			"sp2": "[ \\t\\n\\r]*"
     },
     "rules": [
+			["{sp}\`(\\.|[^\\\`])*\`{sp}", 
+			 "yytext = yytext.replace(/^\\s*\`/, '').replace(/\`\\s*$/, ''); return 'NATIVE';"],
 			["\\/\\*[\\S\\s]*\\*\\/", "return;"],//COMMENT
 			["\\#[^\\n\\r]+[\\n\\r]*", "return;"],//COMMENT
 			["\\\/\\\/[^\\n\\r]+[\\n\\r]*", "return;"],//COMMENT
@@ -19,7 +22,6 @@ var grammar = {
 			 "yytext = yytext.replace(/^\\s*\"/, '').replace(/\"\\s*$/, ''); return 'STRING';"],
 			["{sp}\'(\\.|[^\\\'])*\'{sp}",
        "yytext = yytext.replace(/^\\s*\'/, '').replace(/\'\\s*$/, ''); return 'STRING';"],
-      ["{sp}[\\t\\n;]+{sp}", "return ';'"],
       ["{sp}{int}\\b{sp}", 
 			 "yytext = yytext.replace(/\\s/g, ''); return 'INT';"],
       ["{sp}{int}{frac}?{exp}?\\b{sp}",
@@ -29,45 +31,48 @@ var grammar = {
 			["{sp}\\${digit}*{sp}", 
 			 "yytext = yytext.replace(/\\s/g, '');return 'ID'"],
       ["{sp}\\.{sp}", "return '.'"],
-      ["{sp}\\({sp}", "return '('"],
-      ["{sp}\\){sp}", "return ')'"],
-      ["{sp}\\[{sp}", "return '['"],
-      ["{sp}\\]{sp}", "return ']'"],
-      ["{sp}\\{{sp}", "return '{'"],
-      ["{sp}\\}{sp}", "return '}'"],
-			["{sp}\\?\\={sp}", "return '?='"],
-			["{sp}\\|\\|{sp}", "return '||'"],
-			["{sp}\\&\\&{sp}", "return '&&'"],
-//      ["{sp}\\&{sp}", "return '&'"],
+      ["{sp}\\({sp2}", "return '('"],
+      ["{sp2}\\){sp}", "return ')'"],
+      ["{sp}\\[{sp2}", "return '['"],
+      ["{sp2}\\]{sp}", "return ']'"],
+      ["{sp}\\{{sp2}", "return '{'"],
+      ["{sp2}\\}{sp}", "return '}'"],
+			["{sp}\\?\\={sp2}", "return '?='"],
+			["{sp}\\:\\={sp2}", "return ':='"],
+			["{sp}\\|\\|{sp2}", "return '||'"],
+			["{sp}\\&\\&{sp2}", "return '&&'"],
 //      ["{sp}\\@{sp}", "return '@'"],
 //      ["{sp}\\${sp}", "return '$'"],
-      ["{sp}\\>\\>{sp}", "return '>>'"],
-      ["{sp}\\>{sp}", "return '>'"],
-      ["{sp}\\<{sp}", "return '<'"],
+//      ["{sp}\\>\\>{sp2}", "return '>>'"],
+      ["{sp}\\>{sp2}", "return '>'"],
+      ["{sp}\\<{sp2}", "return '<'"],
+      ["{sp}\\&{sp}", "return '&'"],
       ["{sp}\\|{sp}", "return '|'"],
 			["{sp}\\!{sp}", "return '!'"],
 			["{sp}={sp}", "return '='"],
-			["{sp}\\+{sp}", "return '+'"],
-			["{sp}\\-{sp}", "return '-'"],
-			["{sp}\\*{sp}", "return '*'"],
-			["{sp}\\/{sp}", "return '/'"],
+			["{sp}\\+{sp2}", "return '+'"],
+			["{sp}\\-{sp2}", "return '-'"],
+			["{sp}\\*{sp2}", "return '*'"],
+			["{sp}\\/{sp2}", "return '/'"],
 			["{sp}\\%{sp}", "return '%'"],
 			["{sp}\\^{sp}", "return '^'"],
-			["{sp}\\+{sp}", "return '+'"],
-			["{sp}\\.{sp}", "return '.'"],
-			["{sp}\\:{sp}", "return ':'"],
-      ["{sp},{sp}", "return ','"],
-      ["{sp}\\~{sp}", "return '~'"],
-			["{sp}\\_{sp}", "return '_'"]
+			["{sp}\\.{sp2}", "return '.'"],
+			["{sp}\\:{sp2}", "return ':'"],
+      ["{sp},{sp2}", "return ','"],
+      ["{sp}\\~{sp2}", "return '~'"],
+			["{sp}\\_{sp}", "return '_'"],
+      ["{sp}[\\r\\n;]+{sp}", "return ';'"]
     ]
   },
 	"operators": [
-    ["right", "=", "+=", "-=", "*=", "/=", "?="],
+		["left", "~"],
+    ["right", "=", "+=", "-=", "*=", "/=", "?=", ":="],
 		["left", ","],
     ["left", "||"],
     ["left", "&&"],
     ["left", "+", "-"],
     ["left", "*", "/", "%"],
+    ["right", "&"],
     ["right", "!"],
 		["left", "."],
 		["left", ":"]
@@ -78,12 +83,17 @@ var grammar = {
 		"L": [
 			["ID", "$$ = ['id', yytext]"], //word
 			["STRING", "$$ = ['string', yytext]"],
-			["INT", "$$ = ['num', Number(yytext), 'int']"],
-			["NUMBER", "$$ = ['num', Number(yytext)]"]
+			["INT", "$$ = ['number', Number(yytext), 'int']"],
+			["NUMBER", "$$ = ['number', Number(yytext)]"]
 		],
-		"Ls": [["L", "$$ = [$1]"], //phase
-					 ["Ls L", "$$ = $1; $1.push($2)"]
-					],
+		"Ls": [
+			["L", "$$ = [$1]"], //pharse
+			["Ls L", "$$ = $1; $1.push($2)"]
+		],
+		"Lss": [
+			["Ls", "$$ = $1"],
+			["Lss ExpUnit", "$$ = $1; $1.push($2)"]
+		],
 		"ExpList": [
 			["Exp",  "$$ = ['exps', [$1]];"],  //artical
 			["; Exp",  "$$ = ['exps', [$2]];"],
@@ -92,8 +102,14 @@ var grammar = {
 			[";", "$$ = ['exps', []];"]
 		],
 		"Exp": [//sentence
-			["Ls", "$$ = ['pharse', $1]"], 			
-			["ExpUnit", "$$ = ['pharse', $1]"], 
+			["Lss", "$$ = ['pharse', $1]"], 			
+			["ExpUnit", "$$ = ['pharse', [$1]]"], 
+			["ID := ExpUnit", "$$ = ['define', $1, $3]"],
+			["& Exp", "$$ = ['op', 'ref', $2]"],
+			["! Exp", "$$ = ['op', 'not', $2]"],
+			["Exp = Exp", "$$ = ['op', 'assign', $1, $3]"],
+			["Exp ~ Exp", "$$ = ['op', 'extend', $1, $3]"],
+			["Exp . Exp", "$$ = ['op', 'getkey', $1, $3]"],
 			["Exp + Exp", "$$ = ['op', 'plus', $1, $3]"],
 			["Exp - Exp", "$$ = ['op', 'minus', $1, $3]"],
 			["Exp ?= Exp", "$$ = ['op', 'assignifnull', $1, $3]"]
@@ -102,7 +118,8 @@ var grammar = {
 			["( Exp )", "$$ = $2"],
 			["[ Array ]", "$$ = $2"],
 			["[ Dic ]", "$$ = $2"],
-			["{ ExpList }", "$$ = $2"]
+			["{ ExpList }", "$$ = ['function', $2]"],
+			["NATIVE", "$$ = ['function', ['exps', [['native', $1]]], 'native']"]
 		],
 		"Array": [
 			["Exp", "$$ = ['array', [$1]]"],
