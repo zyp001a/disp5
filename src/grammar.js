@@ -41,12 +41,12 @@ var grammar = {
 			["{sp}\\:\\={sp2}", "return ':='"],
 			["{sp}\\|\\|{sp2}", "return '||'"],
 			["{sp}\\&\\&{sp2}", "return '&&'"],
-//      ["{sp}\\@{sp}", "return '@'"],
 //      ["{sp}\\${sp}", "return '$'"],
 //      ["{sp}\\>\\>{sp2}", "return '>>'"],
       ["{sp}\\>{sp2}", "return '>'"],
       ["{sp}\\<{sp2}", "return '<'"],
       ["{sp}\\&{sp}", "return '&'"],
+      ["{sp}\\@{sp}", "return '@'"],
       ["{sp}\\|{sp}", "return '|'"],
 			["{sp}\\!{sp}", "return '!'"],
 			["{sp}={sp}", "return '='"],
@@ -72,7 +72,7 @@ var grammar = {
     ["left", "&&"],
     ["left", "+", "-"],
     ["left", "*", "/", "%"],
-    ["right", "&"],
+    ["right", "&", "|"],
     ["right", "!"],
 		["left", "."],
 		["left", ":"]
@@ -84,10 +84,12 @@ var grammar = {
 			["ID", "$$ = ['id', yytext]"], //word
 			["STRING", "$$ = ['string', yytext]"],
 			["INT", "$$ = ['number', Number(yytext), 'int']"],
-			["NUMBER", "$$ = ['number', Number(yytext)]"]
+			["NUMBER", "$$ = ['number', Number(yytext)]"],
+			["@ ID", "$$ = ['id', $2, 'origin']"]
 		],
 		"Ls": [
-			["L", "$$ = [$1]"], //pharse
+			["L", "$$ = [$1]"], //phrase
+			["& ExpUnit", "$$ = [$2]"], //phrase
 			["Ls L", "$$ = $1; $1.push($2)"]
 		],
 		"Lss": [
@@ -102,10 +104,13 @@ var grammar = {
 			[";", "$$ = ['exps', []];"]
 		],
 		"Exp": [//sentence
-			["Lss", "$$ = ['pharse', $1]"], 			
-			["ExpUnit", "$$ = ['pharse', [$1]]"], 
+			["Lss", "$$ = ['phrase', $1]"], 			
+			["ExpUnit", "$$ = ['phrase', [$1]]"], 
 			["ID := ExpUnit", "$$ = ['define', $1, $3]"],
-			["& Exp", "$$ = ['op', 'ref', $2]"],
+			["Op", "$$ = $1"]
+		],
+		"Op": [
+			["| Exp", "$$ = ['op', 'ref', $2]"],
 			["! Exp", "$$ = ['op', 'not', $2]"],
 			["Exp = Exp", "$$ = ['op', 'assign', $1, $3]"],
 			["Exp ~ Exp", "$$ = ['op', 'extend', $1, $3]"],

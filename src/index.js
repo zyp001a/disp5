@@ -2,10 +2,12 @@ var version = "5.0.0";
 var fs = require("fs");
 var path = require("path");
 var parser = require("./parser");
+var tmpl = require("./tmpl");
 module.exports = function(env, fn){
 	console.log("#Disp version: "+ version);
 	extendenv(env);
 	parse(env);
+	console.log(env.ast);
 	analyze(env);
 	gen(env);
 	archieve(env);
@@ -13,13 +15,14 @@ module.exports = function(env, fn){
 
 function extendenv(env){
 	if(!env.searchpath) env.searchpath = ["d", "db"];
-	if(!env.cache) env.cache = {};
+	if(!env.ns) env.ns = {};
+	if(!env.tplcache) env.tplcache = {};
 	if(!env.history) env.history = [];
 	if(!env.arg) env.arg = [];//TODO
+
 }
 function parse(env){
 	env.ast = parser.parse(env.src);
-	console.log(env.ast);
 }
 function analyze(env, ast, arg){
 	if(!ast) ast = env.ast;
@@ -34,13 +37,22 @@ function analyze(env, ast, arg){
 		}
 		break;
 
-		case "pharse":
-		cpt = analyze(env, e[0], arg);
-		if(cpt.link.function)
-			return analyze(env, cpt.value, newarg(env, e, arg));//TODO
-		else
-			return cpt;
-		return cpt;
+		case "phrase":
+		var fcpt = analyze(env, e[0], arg);
+		if(fcpt.proto.name == "function"){
+			if(!env.outlang){
+				cpt = analyze(env, fcpt.value, newarg(env, e, arg));//run function
+			}else{				
+				cpt = newcpt(env);
+				cpt.proto = cacheget(env, "call");
+				cpt.value = [];
+				cpt.value[0] = fcpt;
+				cpt.value[1] = newarg(env, e, arg);
+				env.history.push(cpt);
+			}
+		}else{
+			cpt = fcpt;
+		}
 		break;
 
 		case "op":
@@ -56,32 +68,32 @@ function analyze(env, ast, arg){
 
 		case "string":
 		cpt = newcpt(env);
-		cpt.type = "string";
-		cpt.link.string = cacheget(env, "string");
+		cpt.proto = cacheget(env, "string");
 		cpt.value = e;
-		return dic;
 		break;
 
 		case "number":
 		cpt = newcpt(env);
-		cpt.type = "number";
-		cpt.link.number = cacheget(env, "number");
+		cpt.proto = cacheget(env, "number");
 		cpt.value = e;
 		break;
 
 		case "function":
 		cpt = newcpt(env);
-		cpt.type = "function";
-		cpt.link.function = cacheget(env, "function");
-		if(ast[2] == "native")
-			cpt.link.native = cacheget(env, "native");
+		cpt.proto = cacheget(env, "function");
+//		if(ast[2] == "native")
+//			cpt.proto.native = cacheget(env, "native");
 		cpt.value = e;//TODO type check
 		break;
 
 		case "native":
+		if(env.outlang){
+			console.log(arg);
+			die("no implementation for " + env.outlang);
+		}
 		var newenv = {};
 		for(var key in arg.value){
-			var a = analyze(env, arg.value[key], arg);
+			var a = arg.value[key];
 			newenv["$$"+key] = a;
 			newenv["$"+key] = a.value;
 		}
@@ -101,23 +113,22 @@ function analyze(env, ast, arg){
 		cpt = str2cpt(env, result);
 		break;
 
-
 		case "define":
 		cpt = analyze(env, ast[2], arg);
+		cpt.leaf = 1;
 		cpt.name = e;
-		cpt.type = "define";
 		cacheset(env, e, cpt);
 		break;
 
 		case "dic":
 		cpt = newcpt(env);
-		cpt.type = "dic";
+		cpt.proto = cacheget(env, "dic");
 		cpt.value = {};
 		for(var i in e){
 			var kv = e[i];
 			var cptk= analyze(env, kv[0], arg);
 			var key, val;
-			if(cptk.type == "define")
+			if(cptk.leaf)
 				key = cptk.name;
 			else
 				key = cptk.value;
@@ -153,31 +164,60 @@ function op(env, op, left, right){
 }
 function archieve(env){
 }
-function run(env, cpt, args){
-	
+function run(env, cpt, args){	
 	
 }
 function gen(env){
+	if(!env.outlang) return;
+	console.log(env.ns);
+	console.log(env.history);
+	for(var i in env.history){
+		var s = env.history[i];
+		var tplstr = s.proto.tpl[env.outlang];
+		console.log(tmpl.render(tplstr));
+	}
+}
+function loadtpl(env, name){
+	var key = name + "/" + env.outlang;
+
+	if(env.tplcache[key]) 
+		return env.tplcache[key];
+	var got;
+	for(var i in env.searchpath){
+		var sp = env.searchpath[i];
+		var f = __dirname + "/../" + sp + "/"+ key + ".t";
+		if(fs.existsSync(f)){
+			got = fs.readFileSync(f).toString();			
+			break;
+		}
+	}
+	env.tplcache[key] = got;
+	return got;
 }
 function newcpt(env, key){
 	return {
 		name: key,
-		link: {}
+		link: {},
+		tpl: {}
 	}
 }
 function newarg(env, arr, parg){
 	var cpt = newcpt(env);
-	cpt.link.argv = cacheget(env, "argv");
+	cpt.proto = cacheget(env, "argv");
 	cpt.parent = parg;
-	cpt.value = arr;
+	var arra = [];
+	for(var i=1; i<arr.length; i++){		
+		arra[i] = analyze(env, arr[i], parg);
+	}
+	cpt.value = arra;
 	return cpt;
 }
 function cacheset(env, key, cpt){
-	env.cache[key] = cpt;
+	env.ns[key] = cpt;
 }
 function cacheget(env, key){
-	if(env.cache[key]) return env.cache[key];
-	var precached = env.cache[key] = {};
+	if(env.ns[key]) return env.ns[key];
+	var precached = env.ns[key] = {};
 	var got;
 	for(var i in env.searchpath){
 		var sp = env.searchpath[i];
@@ -189,10 +229,16 @@ function cacheget(env, key){
 		}
 	}
 	if(!got) got = newcpt(env, key);
+	if(env.outlang){
+		var tplstr = loadtpl(env, key);
+		if(tplstr != undefined)
+			got.tpl[env.outlang] = tplstr;
+	}
 	for(var subkey in got)
 		precached[subkey] = got[subkey];
 	return got;
 }
+
 
 
 function str2cpt(env, str){
