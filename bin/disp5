@@ -8,47 +8,52 @@ var args = arg1;
 for(var i=4; i< process.argv.length; i++){
 	args+=" "+process.argv[i];
 }
-var env = {
-	username: process.env.USER,
+var context = {
+	user: process.env.USER,
 	lang: "disp"
 }
 var matched;
 if((matched = args.match(/-l\s*(\S+)/))){
-	env.outlang = matched[1];
+	context.outlang = matched[1];
 }
 switch(cmd){
 	case "run":
+	case "gen":
 	var str = fs.readFileSync(arg1).toString();
-	env.src = str;
-	d(env);
+	context.code = str;
+	if(cmd == "gen"){
+		var lang = process.argv[4] || "js";
+		context.code = "gen "+lang + " {"+context.code+"}";
+	}
+	d(context);	
 	break;
 
 	case "exec":
-	env.src = args;
-	d(env);
+	context.code = args;
+	d(context);
 	break;
-
+	
 	case "help":
 	console.log("Basic usage: disp run [file]");
 	break;
 	case "shell":
 	default:
-		shell(env);
+		shell(context);
 }
-function shell(env){
-	ask(env, function(str){
+function shell(context){
+	ask(context, function(str){
 		var result = d(str);
 		if(result)
 			process.exit();
 		else
-			shell(env);
+			shell(context);
 	})
 }
-function ask(env, cb) {
+function ask(context, cb) {
   var r = rl.createInterface({
     input: process.stdin,
     output: process.stdout});
-  r.question(env.username+"@"+ env.lang+ ">", function(answer) {
+  r.question(context.user+"@"+ context.lang+ ">", function(answer) {
     r.close();
 		cb(answer);
   });

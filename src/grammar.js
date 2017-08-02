@@ -15,15 +15,13 @@ var grammar = {
     "rules": [
 			["{sp}\`(\\.|[^\\\`])*\`{sp}", 
 			 "yytext = yytext.replace(/^\\s*\`/, '').replace(/\`\\s*$/, ''); return 'NATIVE';"],
-			["\\/\\*[\\S\\s]*\\*\\/", "return;"],//COMMENT
-			["\\#[^\\n\\r]+[\\n\\r]*", "return;"],//COMMENT
-			["\\\/\\\/[^\\n\\r]+[\\n\\r]*", "return;"],//COMMENT
 			["{sp}\"(\\.|[^\\\"])*\"{sp}", 
 			 "yytext = yytext.replace(/^\\s*\"/, '').replace(/\"\\s*$/, ''); return 'STRING';"],
 			["{sp}\'(\\.|[^\\\'])*\'{sp}",
        "yytext = yytext.replace(/^\\s*\'/, '').replace(/\'\\s*$/, ''); return 'STRING';"],
-      ["{sp}{int}\\b{sp}", 
-			 "yytext = yytext.replace(/\\s/g, ''); return 'INT';"],
+			["\\/\\*[\\S\\s]*\\*\\/", "return;"],//COMMENT
+			["\\#[^\\n\\r]+[\\n\\r]*", "return;"],//COMMENT
+			["\\\/\\\/[^\\n\\r]+[\\n\\r]*", "return;"],//COMMENT
       ["{sp}{int}{frac}?{exp}?\\b{sp}",
 			 "yytext = yytext.replace(/\\s/g, ''); return 'NUMBER';"],
 			["{sp}\\$?{letter}({letter}|{digit})*{sp}", 
@@ -36,6 +34,7 @@ var grammar = {
       ["{sp}\\[{sp2}", "return '['"],
       ["{sp2}\\]{sp}", "return ']'"],
       ["{sp}\\{{sp2}", "return '{'"],
+      ["{sp}\\%\\[{sp2}", "return '%['"],
       ["{sp2}\\}{sp}", "return '}'"],
 			["{sp}\\?\\={sp2}", "return '?='"],
 			["{sp}\\:\\={sp2}", "return ':='"],
@@ -65,31 +64,30 @@ var grammar = {
     ]
   },
 	"operators": [
-		["left", "~"],
-    ["right", "=", "+=", "-=", "*=", "/=", "?=", ":="],
+    ["right", "=", "+=", "-=", "*=", "/=", "?=", ":=", ">", "<"],
 		["left", ","],
     ["left", "||"],
     ["left", "&&"],
     ["left", "+", "-"],
     ["left", "*", "/", "%"],
-    ["right", "&", "|"],
+    ["right", "&", "|", "@", "~", "%"],
     ["right", "!"],
 		["left", "."],
 		["left", ":"]
 	],
   "start": "Block",
   "bnf": {
-		"Block": [["ExpList", "return $$ = $1"]],
+		"Block": [
+			["@ NATIVE", "return $$ = ['_native', $2]"],
+			["ExpList", "return $$ = $1"]
+		],
 		"L": [
-			["ID", "$$ = ['id', yytext]"], //word
-			["STRING", "$$ = ['string', yytext]"],
-			["INT", "$$ = ['number', Number(yytext), 'int']"],
-			["NUMBER", "$$ = ['number', Number(yytext)]"],
-			["@ ID", "$$ = ['id', $2, 'origin']"]
+			["ID", "$$ = ['_id', yytext]"], //word
+			["STRING", "$$ = ['_string', yytext]"],
+			["NUMBER", "$$ = ['_number', Number(yytext)]"]
 		],
 		"Ls": [
 			["L", "$$ = [$1]"], //phrase
-			["& ExpUnit", "$$ = [$2]"], //phrase
 			["Ls L", "$$ = $1; $1.push($2)"]
 		],
 		"Lss": [
@@ -97,42 +95,50 @@ var grammar = {
 			["Lss ExpUnit", "$$ = $1; $1.push($2)"]
 		],
 		"ExpList": [
-			["Exp",  "$$ = ['exps', [$1]];"],  //artical
-			["; Exp",  "$$ = ['exps', [$2]];"],
+			["Exp",  "$$ = ['_function', [$1]];"],  //artical
+			["; Exp",  "$$ = ['_function', [$2]];"],
 			["ExpList ; Exp", "$$ = $1; $1[1].push($3);"],
 			["ExpList ;", "$$ = $1;"],
-			[";", "$$ = ['exps', []];"]
+			[";", "$$ = ['_function', []];"]
 		],
 		"Exp": [//sentence
-			["Lss", "$$ = ['phrase', $1]"], 			
-			["ExpUnit", "$$ = ['phrase', [$1]]"], 
-			["ID := ExpUnit", "$$ = ['define', $1, $3]"],
-			["Op", "$$ = $1"]
+			["ExpUnit", "$$ = ['_phrase', [$1]]"],
+			["Lss", "$$ = ['_phrase', $1]"],
+			["Op", "$$ = $1"],
+			["NATIVE", "$$ = ['_native', $1]"]
 		],
 		"Op": [
-			["| Exp", "$$ = ['op', 'ref', $2]"],
-			["! Exp", "$$ = ['op', 'not', $2]"],
-			["Exp = Exp", "$$ = ['op', 'assign', $1, $3]"],
-			["Exp ~ Exp", "$$ = ['op', 'extend', $1, $3]"],
-			["Exp . Exp", "$$ = ['op', 'getkey', $1, $3]"],
-			["Exp + Exp", "$$ = ['op', 'plus', $1, $3]"],
-			["Exp - Exp", "$$ = ['op', 'minus', $1, $3]"],
-			["Exp ?= Exp", "$$ = ['op', 'assignifnull', $1, $3]"]
+			["| Exp", "$$ = ['_op', 'ref', $2]"],
+			["! Exp", "$$ = ['_op', 'not', $2]"],
+			["& Exp", "$$ = ['_op', 'getv', $2]"],
+			["Exp := Exp", "$$ = ['_op', 'define', $1, $3]"],
+			["Exp = Exp", "$$ = ['_op', 'assign', $1, $3]"],
+			["Exp ~ Exp", "$$ = ['_op', 'extend', $1, $3]"],
+			["Exp . Exp", "$$ = ['_op', 'getkey', $1, $3]"],
+			["Exp + Exp", "$$ = ['_op', 'plus', $1, $3]"],
+			["Exp - Exp", "$$ = ['_op', 'minus', $1, $3]"],
+			["Exp < Exp", "$$ = ['_op', 'less', $1, $3]"],
+			["Exp ?= Exp", "$$ = ['_op', 'assignifnull', $1, $3]"]
 		],
 		"ExpUnit": [
 			["( Exp )", "$$ = $2"],
-			["[ Array ]", "$$ = $2"],
-			["[ Dic ]", "$$ = $2"],
-			["{ ExpList }", "$$ = ['function', $2]"],
-			["NATIVE", "$$ = ['function', ['exps', [['native', $1]]], 'native']"]
+			["[ Array ]", "$$ = ['_array', $2]"],
+			["[ ]", "$$ = ['_array', []]"],
+			["{ ExpList }", "$$ = $2"]
 		],
-		"Array": [
-			["Exp", "$$ = ['array', [$1]]"],
-			["Array , Exp", "$$ = $1, $1[1].push($3)"]
+ 		"Array": [
+			["Exp", "$$ = [$1]"],
+			["Array , Exp", "$$ = $1, $1.push($3)"]
+		],
+		"Prop": [
+			["L : ", "$$ = $1"],
+			["( Exp ) :", "$$ = $2"]
 		],
 		"Dic": [
-			["Exp : Exp", "$$ = ['dic', [[$1, $3]]]"],
-			["Dic , Exp : Exp", "$$ = $1, $1[1].push([$3, $5])"]			
+			["Exp", "$$ = [$1]"],
+			["Prop Exp", "$$ = [['prop', $1, $2]]"],
+			["Dic , Exp", "$$ = $1, $1.push($3)"],
+			["Dic , Prop Exp", "$$ = $1, $1.push(['prop', $3, $4])"]
 		]
   }
 };
