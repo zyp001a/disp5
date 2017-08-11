@@ -23,7 +23,7 @@ switch(cmd){
 	context.code = str;
 	if(cmd == "gen"){
 		var lang = process.argv[4] || "js";
-		context.code = "gen "+lang + " {"+context.code+"}";
+		context.code = "gen {"+context.code+"} [@lang = " + lang + "Arch ]";
 	}
 	d(context);	
 	break;

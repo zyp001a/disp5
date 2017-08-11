@@ -6,9 +6,12 @@ var tmpl = require("./tmpl");
 
 var rootns = rawcpt("rootns");
 rootns.prop.rootns = rootns;
+rootns.link.jsImpl = gc(rootns, "jsImpl", 0, 1);
+rootns.link.init = gc(rootns, "init", 0, 1);
+rootns.isroot = 1;
 var tplcache = {};
 var codecache = {};
-var todump = {};
+var topersist= {};
 module.exports = function(config, fn){
 	console.log("#Disp version: "+ version);
 	var cpt = bootstrap(config);
@@ -21,29 +24,19 @@ module.exports = function(config, fn){
 	archive();
 }
 /*
-function g(hash, keystr){
-	var cpt = getvcont(gc(hash, keystr));
-	if(cpt != undefined) return cpt.value;
+function gcp(parent, key){
+	for(var pkey in parent){
+		var cpt = gc(parent[pkey], key);
+		if(cpt) return cpt;
+	}
+	return newcpt(hash, undefined, undefined, key);
 }
 */
-
-function gc(hash, keystr){
-	var arr = keystr.split("\/");
-	var cpt = hash;
-	for(var i in arr){
-		var ncpt = _gc(cpt, arr[i]);
-		if(!ncpt) cpt = newcpt(cpt, undefined, undefined, arr[i]);
-		else cpt = ncpt;
-	}
-	return cpt;
-}
-
-function _gc(hash, key, limit){
+function gc(hash, key, limitf, newf){
 	if(key in hash.prop){
 		return hash.prop[key];
 	}
 	var f = __dirname + "/../"+ hash.path + "/" + key + ".mm";
-
 	if(fs.existsSync(f)){
 		var str = fs.readFileSync(f).toString();
 		var ast = parse(str);
@@ -51,26 +44,43 @@ function _gc(hash, key, limit){
 		sc(hash, key, cpt);
 		return cpt;
 	}
-	if(limit)
-		return;
-	for(var p in hash.parent){
-		var cpt = _gc(hash.parent[p], key);
-		if(cpt) return cpt;
+	if(limitf > 0){
+		for(var p in hash.parent){
+			var cpt = gc(hash.parent[p], key, limitf);
+			if(cpt) return cpt;
+		}
 	}
-//	return newcpt(hash, undefined, undefined, key);
-}
-function s(hash, keystr, raw){
-	sc(hash, keystr, raw2cpt(hash, raw));
+	if(limitf > 1){
+		for(var p in hash.link){
+			var cpt = gc(hash.link[p], key, limitf-1);
+			if(cpt) return cpt;
+		}
+	}
+	if(newf)
+		return newcpt(hash, undefined, undefined, key);
 }
 function sc(hash, key, cpt){
+	if(!cpt){
+		cpt = rawcpt(key);
+	}
 	hash.prop[key] = cpt;
-	if(cpt.name[0] == "$"){
+	if(hash.name[0] != "$" && cpt.name[0] == "$"){
 		var oldkey = cpt.name;
 		cpt.name = key;
 		cpt.path = hash.path + "/" + key;
 		for(var keyp in cpt.parent){
 			var p = cpt.parent[keyp];
 			delete p.prop[oldkey];
+		}
+		repathprop(cpt);
+	}
+}
+function repathprop(cpt){
+	for(var keyp in cpt.prop){	
+		var kcpt = cpt.prop[keyp];
+		if(kcpt.name[0] != "$"){
+			kcpt.path = cpt.path +"/"+kcpt.name;
+			repathprop(kcpt);
 		}
 	}
 }
@@ -104,7 +114,7 @@ function isproto(cpt, tarkey){
 }
 function isparent(cpt, tarkey){
 	for(var key in cpt.parent){
-		if(tarkey == key) return 1;		
+		if(tarkey == key) return 1;
 		if(isparent(cpt.parent[key], tarkey))
 			return 1;
 	}
@@ -129,16 +139,19 @@ function assign(left, right){
 	for(var key1 in asskey)
 		for(var key in right[key1])
 			left[key1][key] = right[key1][key];
+	topersist[left.path] = left;
 }
 function bootstrap(config){
-//todo config
-//	sc(rootns, "$searchpath",
-//		newcpt($rootns, ["d", "db"], "Array"));
-	var userns = newcpt(rootns, undefined, undefined, config.user);
+//todo confi
+//	var userns = newcpt(rootns, undefined, undefined, config.user);
 	var ast = parse(config.code);
-	var main = analyze(userns, ast);
-	sc(userns, "main", main);
+	var main = analyze(rootns, ast);
+	sc(rootns, config.user, main);
+	setproto(rootns, main, "Main");
 	return main;//ast -> cpt
+}
+function setproto(ns, cpt, proto){
+	cpt.proto[proto] = gc(ns, proto, 2, 1);
 }
 function parse(src){
 	if(src == undefined || src == null) src = ";";
@@ -147,8 +160,9 @@ function parse(src){
 function newcall(ns, fcpt, argarr){
 	var cpt = newcpt(ns, undefined, "Call");
 	sc(cpt, "function", fcpt);
+	if(!argarr) argarr = [];
 	var acpt = newcpt(cpt, argarr, "Arguments", "arguments");
-	var at = _gc(fcpt, "callatanalyze", 1);
+	var at = gc(fcpt, "precall");
 	if(at)
 		callfunc(newcall(ns, at, argarr));
 	return cpt;
@@ -158,8 +172,9 @@ function analyze(ns, ast){
 	var e = ast[1];
 	var cpt;
 	switch(c){
-		case "_function":
-		cpt = newcpt(ns, [], "Function");
+		case "_newobj":
+		cpt = newcpt(ns, [], ast[2]);
+		setproto(rootns, cpt, "Array");
 		for(var i in e){
 			cpt.value.push(analyze(cpt, e[i]));
 		}
@@ -180,9 +195,9 @@ function analyze(ns, ast){
 
 		case "_id":
 		if(e[0] == "$"){
-			cpt = newcall(ns, gc(rootns, "get"), [newcpt(ns, e, "String")]);
+			cpt = newcall(ns, gc(rootns, "get", 2, 1), [newcpt(ns, e, "String")]);
 		}else{
-			cpt = gc(ns, e);
+			cpt = gc(ns, e, 2, 1);
 		}
 		break;
 
@@ -202,7 +217,7 @@ function analyze(ns, ast){
 		var left = analyze(ns, ast[2]);
 		var right;
 		if(ast[3]) right = analyze(ns, ast[3]);
-		cpt = newcall(ns, _gc(rootns, e), [left, right]);
+		cpt = newcall(ns, gc(rootns, e, 2, 1), [left, right]);
 		break;
 
 		default:
@@ -225,16 +240,29 @@ function op(ns, op, left, right){
 		console.log("unknown op "+op);
 	}
 }
+function gen(tarcpt, configcpt){
+	
+//	console.log(archcpt);
+//	console.log(cpt);
+}
 function archive(){
+	for(var key in topersist){
+		var cpt = topersist[key];
+		
+		console.log(cpt.path);
+	}
+}
+function cpt2str(){
+	
 }
 function extend(){
 }
 function callnative(cpt){
-	var func = _gc(cpt, "function", 1);
+	var func = gc(cpt, "function");
 	var v = func.value;
 	var ns = {};
-	var arg = _gc(cpt, "arguments", 1);
-	var env = _gc(cpt, "env", 1);
+	var arg = gc(cpt, "arguments");
+	var env = gc(cpt, "env");
 	for(var key in arg.value){
 		var a = arg.value[key];
 		ns["$$"+key] = a;
@@ -242,6 +270,7 @@ function callnative(cpt){
 	}
 	ns.$ = {
 		assign: assign,
+		gen: gen,
 		gc: gc,
 		env: env
 	}
@@ -261,10 +290,14 @@ function callnative(cpt){
 }
 
 function callfunc(cpt){
-	var func = _gc(cpt, "function", 1);
-	console.log("call " + func.path);
-	var arg = _gc(cpt, "arguments", 1);
-	sc(cpt, "env", newcpt());
+	var func = gc(cpt, "function");
+	if(!func){
+		console.log(cpt);
+		die("wrong call")
+	}
+	console.log("call " + cpt.name + " " + func.path);
+	var arg = gc(cpt, "arguments");
+	sc(cpt, "env");
 	if(isproto(func, "Native") && typeof func.value == "string"){
 		callnative(cpt);
 		return cpt;
@@ -278,7 +311,7 @@ function callfunc(cpt){
 		}
 	}
 	if(!cpt.prop.result)
-		sc(cpt, "result", newcpt());
+		sc(cpt, "result");
 	return cpt;
 }
 
@@ -313,8 +346,6 @@ function rawcpt(name){
 	return cpt;
 }
 function newcpt(ns, value, protoname, name){
-	if(!ns) 
-		return rawcpt("$");
 	if(!name){
 		name = "$" + (protoname || "name") + (ns.nexti++);
 	}
@@ -324,11 +355,12 @@ function newcpt(ns, value, protoname, name){
 	cpt.path = ns.path + "/" + name;
 	cpt.value = value;
 	if(!protoname) protoname = "Obj";
-	var proto = gc(rootns, protoname);
+	var proto = gc(rootns, protoname, 2, 1);
 	cpt.proto[protoname] = proto;
 //do statistics
 	return cpt;
 }
+/*
 function cacheset(ns, key, cpt){
 	ns.ns[key] = cpt;
 }
@@ -356,7 +388,7 @@ function cacheget(ns, key){
 	return got;
 }
 
-
+*/
 
 function str2cpt(ns, str){
 	if(str == "") return cacheget(ns, "null");

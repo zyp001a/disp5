@@ -36,8 +36,11 @@ var grammar = {
       ["{sp}\\{{sp2}", "return '{'"],
       ["{sp}\\%\\[{sp2}", "return '%['"],
       ["{sp2}\\}{sp}", "return '}'"],
-			["{sp}\\?\\={sp2}", "return '?='"],
-			["{sp}\\:\\={sp2}", "return ':='"],
+			["{sp}\\=\\~{sp2}", "return '=~'"],
+			["{sp}\\=\\?{sp2}", "return '=?'"],
+			["{sp}\\=\\:{sp2}", "return '=:'"],
+			["{sp}\\=\\>{sp2}", "return '=>'"],
+			["{sp}\\-\\>{sp2}", "return '->'"],
 			["{sp}\\|\\|{sp2}", "return '||'"],
 			["{sp}\\&\\&{sp2}", "return '&&'"],
 //      ["{sp}\\${sp}", "return '$'"],
@@ -64,7 +67,9 @@ var grammar = {
     ]
   },
 	"operators": [
-    ["right", "=", "+=", "-=", "*=", "/=", "?=", ":=", ">", "<"],
+    ["right", "=", "+=", "-=", "*=", "/=", "=?", "=:", "=>", "->"],
+		["left", "<", ">", "=>", "<=", "=="],
+		["left", "=~"],
 		["left", ","],
     ["left", "||"],
     ["left", "&&"],
@@ -78,11 +83,15 @@ var grammar = {
   "start": "Block",
   "bnf": {
 		"Block": [
-			["@ NATIVE", "return $$ = ['_native', $2]"],
-			["ExpList", "return $$ = $1"]
+			["Native", "return $$ = $1"],
+			["ExpList", "return $$ = ['_newobj', $1, 'Function']"]
+		],
+		"Native": [
+			["NATIVE", "$$ = ['_native', $1]"]
 		],
 		"L": [
 			["ID", "$$ = ['_id', yytext]"], //word
+			["@ ID", "$$ = ['_id', $2, 'local']"], //word
 			["STRING", "$$ = ['_string', yytext]"],
 			["NUMBER", "$$ = ['_number', Number(yytext)]"]
 		],
@@ -95,37 +104,44 @@ var grammar = {
 			["Lss ExpUnit", "$$ = $1; $1.push($2)"]
 		],
 		"ExpList": [
-			["Exp",  "$$ = ['_function', [$1]];"],  //artical
-			["; Exp",  "$$ = ['_function', [$2]];"],
-			["ExpList ; Exp", "$$ = $1; $1[1].push($3);"],
+			["Exp",  "$$ = [$1];"],  //artical
+			["; Exp",  "$$ = [$2];"],
+			["ExpList ; Exp", "$$ = $1; $1.push($3);"],
 			["ExpList ;", "$$ = $1;"],
-			[";", "$$ = ['_function', []];"]
+			[";", "$$ = [];"]
 		],
 		"Exp": [//sentence
 			["ExpUnit", "$$ = ['_phrase', [$1]]"],
 			["Lss", "$$ = ['_phrase', $1]"],
-			["Op", "$$ = $1"],
-			["NATIVE", "$$ = ['_native', $1]"]
+			["Lss Precall", "$$ = ['_phrase', $1, $2]"],
+			["Op", "$$ = $1"]
 		],
 		"Op": [
-			["| Exp", "$$ = ['_op', 'ref', $2]"],
 			["! Exp", "$$ = ['_op', 'not', $2]"],
-			["& Exp", "$$ = ['_op', 'getv', $2]"],
-			["Exp := Exp", "$$ = ['_op', 'define', $1, $3]"],
+			["& Exp", "$$ = ['_op', 'getres', $2]"],
 			["Exp = Exp", "$$ = ['_op', 'assign', $1, $3]"],
-			["Exp ~ Exp", "$$ = ['_op', 'extend', $1, $3]"],
-			["Exp . Exp", "$$ = ['_op', 'getkey', $1, $3]"],
+			["Exp = Native", "$$ = ['_op', 'assign', $1, $3]"],
+			["Exp . Exp", "$$ = ['_op', 'get', $1, $3]"],
 			["Exp + Exp", "$$ = ['_op', 'plus', $1, $3]"],
 			["Exp - Exp", "$$ = ['_op', 'minus', $1, $3]"],
 			["Exp < Exp", "$$ = ['_op', 'less', $1, $3]"],
-			["Exp ?= Exp", "$$ = ['_op', 'assignifnull', $1, $3]"]
+			["Exp =~ Exp", "$$ = ['_op', 'match', $1, $3]"],
+			["Exp =? Exp", "$$ = ['_op', 'default', $1, $3]"],
+			["Exp =: Exp", "$$ = ['_op', 'proto', $1, $3]"],
+			["Exp => Exp", "$$ = ['_op', 'parent', $1, $3]"],
+			["Exp -> Exp", "$$ = ['_op', 'link', $1, $3]"]
 		],
 		"ExpUnit": [
 			["( Exp )", "$$ = $2"],
-			["[ Array ]", "$$ = ['_array', $2]"],
-			["[ ]", "$$ = ['_array', []]"],
-			["{ ExpList }", "$$ = $2"]
+			["{ ExpList }", "$$ = ['_newcpt', $2, 'Function']"],
+			["{ }", "$$ = ['_newcpt', [], 'Function']"],
+			[": { ExpList }", "$$ = ['newcpt', $2, 'Obj']"]
 		],
+		"Precall": [
+			["[ ExpList ]", "$$ = ['_precall', $2]"],
+			["[ ]", "$$ = ['_precall', []]"]
+		]
+/*
  		"Array": [
 			["Exp", "$$ = [$1]"],
 			["Array , Exp", "$$ = $1, $1.push($3)"]
@@ -140,6 +156,7 @@ var grammar = {
 			["Dic , Exp", "$$ = $1, $1.push($3)"],
 			["Dic , Prop Exp", "$$ = $1, $1.push(['prop', $3, $4])"]
 		]
+*/
   }
 };
 var options = {};

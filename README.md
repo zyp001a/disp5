@@ -64,3 +64,27 @@ example
 
 -misc
     -emacs plugin
+
+
+set parent 
+		a =: b
+set proto 
+		a => b
+new obj 
+		a = new b {}
+define proto 
+{
+ self => P
+ a =? 1
+ b =: c
+}
+
+
+gen:
+impl all obj defs, functions and calls
+
+
+naming rule:
+info+Proto
+info -> obj
+Info -> proto
