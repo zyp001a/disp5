@@ -19,6 +19,7 @@ var grammar = {
 			 "yytext = yytext.replace(/^\\s*\"/, '').replace(/\"\\s*$/, ''); return 'STRING';"],
 			["{sp}\'(\\.|[^\\\'])*\'{sp}",
        "yytext = yytext.replace(/^\\s*\'/, '').replace(/\'\\s*$/, ''); return 'STRING';"],
+      ["{sp}\\\\[\\r\\n;]+{sp}", "return"],
 			["\\/\\*[\\S\\s]*\\*\\/", "return;"],//COMMENT
 			["\\#[^\\n\\r]+[\\n\\r]*", "return;"],//COMMENT
 			["\\\/\\\/[^\\n\\r]+[\\n\\r]*", "return;"],//COMMENT
@@ -43,6 +44,7 @@ var grammar = {
 			["{sp}\\-\\>{sp2}", "return '->'"],
 			["{sp}\\|\\|{sp2}", "return '||'"],
 			["{sp}\\&\\&{sp2}", "return '&&'"],
+			["{sp}\\:\\:{sp2}", "return '::'"],
 //      ["{sp}\\${sp}", "return '$'"],
 //      ["{sp}\\>\\>{sp2}", "return '>>'"],
       ["{sp}\\>{sp2}", "return '>'"],
@@ -67,7 +69,8 @@ var grammar = {
     ]
   },
 	"operators": [
-    ["right", "=", "+=", "-=", "*=", "/=", "=?", "=:", "=>", "->"],
+    ["right", "=", "+=", "-=", "*=", "/="],
+		["left", "=?", "=:", "=>", "->"],
 		["left", "<", ">", "=>", "<=", "=="],
 		["left", "=~"],
 		["left", ","],
@@ -77,65 +80,86 @@ var grammar = {
     ["left", "*", "/", "%"],
     ["right", "&", "|", "@", "~", "%"],
     ["right", "!"],
-		["left", "."],
-		["left", ":"]
+		["left", ".", ":"]
 	],
   "start": "Block",
   "bnf": {
 		"Block": [
-			["Native", "return $$ = $1"],
-			["ExpList", "return $$ = ['_newobj', $1, 'Function']"]
+//			["Native", "return $$ = $1"],
+//			["ExpUnit", "return $$ = $1"]
+			["Exp", "return $$ = $1"],
+			["Exp ;", "return $$ = $1"]
+//			["ExpList", "return $$ = ['_newcpt', $1, 'Function']"]
 		],
 		"Native": [
 			["NATIVE", "$$ = ['_native', $1]"]
 		],
-		"L": [
-			["ID", "$$ = ['_id', yytext]"], //word
-			["@ ID", "$$ = ['_id', $2, 'local']"], //word
-			["STRING", "$$ = ['_string', yytext]"],
-			["NUMBER", "$$ = ['_number', Number(yytext)]"]
+		"L": [//word
+			["ID", "$$ = ['_id', $1]"],
+//			["ID :: ID", "$$ = ['_id', $3, $1]"],
+			["STRING", "$$ = ['_string', $1]"],
+			["NUMBER", "$$ = ['_number', Number($1)]"]
+//			["@ ID", "$$ = ['_dickey', $2]"], 
+//			["@ STRING", "$$ = ['_dickey', $2]"], 
+//			["@ NUMBER", "$$ = ['_dickey', $2]"]
 		],
 		"Ls": [
-			["L", "$$ = [$1]"], //phrase
+			["L", "$$ = [$1]"], //newcall
 			["Ls L", "$$ = $1; $1.push($2)"]
 		],
 		"Lss": [
 			["Ls", "$$ = $1"],
 			["Lss ExpUnit", "$$ = $1; $1.push($2)"]
 		],
+		"ExpEx": [
+			["Exp", "$$ = $1"],
+			["@ Exp", "$$ = ['_precall', $2]"]
+		],
 		"ExpList": [
-			["Exp",  "$$ = [$1];"],  //artical
-			["; Exp",  "$$ = [$2];"],
-			["ExpList ; Exp", "$$ = $1; $1.push($3);"],
+			["ExpEx",  "$$ = [$1];"],  //artical
+			["; ExpEx",  "$$ = [$2];"],
+			["ExpList ; ExpEx", "$$ = $1; $1.push($3);"],
 			["ExpList ;", "$$ = $1;"],
 			[";", "$$ = [];"]
 		],
 		"Exp": [//sentence
-			["ExpUnit", "$$ = ['_phrase', [$1]]"],
-			["Lss", "$$ = ['_phrase', $1]"],
-			["Lss Precall", "$$ = ['_phrase', $1, $2]"],
-			["Op", "$$ = $1"]
+			["( Exp )", "$$ = ['_newcall', $2]"],
+			["Lss", "$$ = ['_newcall', $1]"],
+			[": ExpUnit", "$$ = ['_function', $2]"],
+//			["Lss Precall", "$$ = ['_newcall', $1, $2]"],
+//			["ExpUnit", "$$ = $1"],
+			["Op", "$$ = $1"],
+			["Native", "$$ = $1"]
 		],
 		"Op": [
 			["! Exp", "$$ = ['_op', 'not', $2]"],
-			["& Exp", "$$ = ['_op', 'getres', $2]"],
 			["Exp = Exp", "$$ = ['_op', 'assign', $1, $3]"],
-			["Exp = Native", "$$ = ['_op', 'assign', $1, $3]"],
-			["Exp . Exp", "$$ = ['_op', 'get', $1, $3]"],
+//			["Exp : Exp", "$$ = ['_op', 'preassign', $1, $3]"],
 			["Exp + Exp", "$$ = ['_op', 'plus', $1, $3]"],
 			["Exp - Exp", "$$ = ['_op', 'minus', $1, $3]"],
 			["Exp < Exp", "$$ = ['_op', 'less', $1, $3]"],
-			["Exp =~ Exp", "$$ = ['_op', 'match', $1, $3]"],
-			["Exp =? Exp", "$$ = ['_op', 'default', $1, $3]"],
-			["Exp =: Exp", "$$ = ['_op', 'proto', $1, $3]"],
-			["Exp => Exp", "$$ = ['_op', 'parent', $1, $3]"],
-			["Exp -> Exp", "$$ = ['_op', 'link', $1, $3]"]
+			["Exp . Exp", "$$ = ['_op', 'get', $1, $3]"]
+//			["Exp =~ Exp", "$$ = ['_op', 'match', $1, $3]"]
+//			["Exp =? Exp", "$$ = ['_op', 'default', $1, $3]"],
+//			["Exp =: Exp", "$$ = ['_op', 'proto', $1, $3]"],
+//			["Exp => Exp", "$$ = ['_op', 'parent', $1, $3]"],
+//			["Exp -> Exp", "$$ = ['_op', 'link', $1, $3]"]
 		],
 		"ExpUnit": [
-			["( Exp )", "$$ = $2"],
-			["{ ExpList }", "$$ = ['_newcpt', $2, 'Function']"],
-			["{ }", "$$ = ['_newcpt', [], 'Function']"],
-			[": { ExpList }", "$$ = ['newcpt', $2, 'Obj']"]
+			["Braket", "$$ = ['_block', $1]"],
+			["Brace", "$$ = ['_block', $1, 'function']"]
+//			[": ID Braket", "$$ = ['_newcpt', $3, 'Function', $2]"],
+//			["^ Braket", "$$ = ['_newcpt', $2, 'Cpt']"],
+//			["^ : ID Braket", "$$ = ['_newcpt', $4, 'Cpt', $3]"],
+//			["^ ID : ID Braket", "$$ = ['_newcpt', $5, $2, $4]"]
+		],
+		"Braket": [
+			["[ ExpList ]", "$$ = $2"],
+			["[ ]", "$$ = []"]
+		],
+		"Brace": [
+			["{ ExpList }", "$$ = $2"],
+			["{ }", "$$ = []"]
 		],
 		"Precall": [
 			["[ ExpList ]", "$$ = ['_precall', $2]"],

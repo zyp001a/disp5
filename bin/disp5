@@ -22,8 +22,10 @@ switch(cmd){
 	var str = fs.readFileSync(arg1).toString();
 	context.code = str;
 	if(cmd == "gen"){
-		var lang = process.argv[4] || "js";
-		context.code = "gen {"+context.code+"} [@lang = " + lang + "Arch ]";
+		var lang = process.argv[4] || "nodejs";
+		context.code = ":{ @main = :{ "+context.code+" }; arch = arch." + lang + "; mount = 'gen'; gen }";
+	}else{
+		context.code = ":{ "+context.code+" }";
 	}
 	d(context);	
 	break;
@@ -36,6 +38,7 @@ switch(cmd){
 	case "help":
 	console.log("Basic usage: disp run [file]");
 	break;
+
 	case "shell":
 	default:
 		shell(context);

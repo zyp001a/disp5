@@ -2,6 +2,9 @@ Self-generated conceptual language
 Display mind;
 Do it simple!
 
+##Grammar guide
+
+
 ##goal
 
 ##thought of mind
@@ -71,7 +74,9 @@ set parent
 set proto 
 		a => b
 new obj 
-		a = new b {}
+		a = ^ B {
+			
+		}
 define proto 
 {
  self => P
@@ -88,3 +93,15 @@ naming rule:
 info+Proto
 info -> obj
 Info -> proto
+
+path is related with Proto
+{
+}
+
+Object
+ Ref
+ Class
+ Value
+  Call
+ Function
+

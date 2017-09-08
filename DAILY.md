@@ -61,11 +61,13 @@ The Tree:
 
 Cpt
  Proto
+ Hash
+ Array
  Value +value => js Object
   String
   Number
-  Hash
-  ValueArray
+  Call +call
+  Return
  Native +native
  Ref +ref
  Ns =>do setparent
@@ -73,7 +75,6 @@ Cpt
   Function +function
    FunctionNative
  Shadow
- Call +call
 
 Generate process:
  prepare code tree Cpt -> main -> all related -> ... -> map to folder
@@ -84,3 +85,48 @@ Archive guide:
 
 modify arguments
 modify assign
+
+done 1step
+
+gen:
+Tree
+Program 
+
+# 9.3
+when create obj, call
+Hash
+another callfunc
+
+^ define
+: name
+
+
+arch: 
+1. each function -> convert to langfunction
+2. fs parts 
+-> 
+requirements
+connected
+main
+
+lang
+connector
+interlang
+
+# 9.7
+get writable and get readable is different
+4level
+Ref:
+blood read all/write blood
+parent read all/write new
+link read all/write all pass once*/*
+
+blood is perfect proto
+Ns is used only for archive
+
+Part
+gc: read?write? part?
+
+
+
+

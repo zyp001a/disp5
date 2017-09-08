@@ -1,0 +1,1 @@
+`$.setproto($.self, $$0)`
