@@ -137,7 +137,6 @@ function isparent(cpt, tarkey){
 }
 
 function assign(left, right){
-
 	left.value = right;
 }
 function setparent(cpt, pcpt){
@@ -180,10 +179,6 @@ function analyze(ns, ast){
 	var e = ast[1];
 	var cpt;
 	switch(c){
-		case "_function":
-		cpt = newcpt(ns, "Function");
-		analyze(cpt, e);
-		break;
 
 		case "_block":
 		var arr = [];
@@ -218,6 +213,16 @@ function analyze(ns, ast){
 		cpt = undefined;
 		break;
 
+		case "_function":
+		cpt = newcpt(ns, "Function");
+		if(e[0] == "_block"){
+			if(e[2])//newns
+				analyze(cpt, e);					
+			else
+				analyze(ns, e);
+		}
+		break;
+
 		case "_newcall"://action
 		var fcpt = analyze(ns, e[0]);
 		if(e.length > 1){
@@ -240,7 +245,7 @@ function analyze(ns, ast){
 		break;
 
 		case "_id":
-		if(ast[2])
+		if(ast.assignable)
 			cpt = gc(ns, e, {limit:2, assignable:1});
 		else
 			cpt = gc(ns, e, {limit:2});
@@ -268,9 +273,12 @@ function analyze(ns, ast){
 		break;
 		
 		case "_op":
-		if(e == "assign" || e == "preassign")
+		if(e == "assign" || e == "preassign"){
 			if(ast[2][0] == "_id")
-				ast[2][2] = 1;
+				ast[2].assignable = 1;
+			if(ast[2][0] == "_op" && ast[2][1] == "get")
+				ast[2][1] = "getAssignable"
+		}
 		var left = analyze(ns, ast[2]);
 		var right;
 		if(ast[3]) right = analyze(ns, ast[3]);
@@ -365,6 +373,7 @@ function callnative(cpt, func, argvp){
 	ns.$ = {
 		assign: assign,
 		setproto: setproto,
+		setparent: setparent,
 		isproto: isproto,
 		gen: gen,
 		gc: gc,
@@ -395,7 +404,7 @@ function callfunc(cpt, flag){
 	var argvp = [];
 	for(var i in argv){
 		if(isproto(argv[i], "Call")){
-			argvp[i] = callfunc(argv[i]);
+			argvp[i] = callfunc(argv[i]).value;
 		}else{
 			argvp[i] = argv[i];
 		}
@@ -405,12 +414,16 @@ function callfunc(cpt, flag){
 	for(var i in argvp){
 		printstr += argvp[i].path + ",";
 	}
-	console.log("call " + func.name + " " + func.path + " " + printstr);
 	var result;
 	if(isproto(func, "Native")){
+		console.log("callnative: " + func.value + "\n\t" + printstr);
 		var resultstr = callnative(cpt, func, argvp);
-		result = raw2cpt(resultstr);
-	}else{		
+		if(typeof resultstr != "object")
+			result = raw2cpt(resultstr);
+		else
+			result = resultstr;
+	}else{
+		console.log("callfunc: " + func.path);
 		var step = _get(func, "block");
 		for(var i in step){
 			var scpt = step[i];

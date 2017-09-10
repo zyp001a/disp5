@@ -99,9 +99,6 @@ var grammar = {
 //			["ID :: ID", "$$ = ['_id', $3, $1]"],
 			["STRING", "$$ = ['_string', $1]"],
 			["NUMBER", "$$ = ['_number', Number($1)]"]
-//			["@ ID", "$$ = ['_dickey', $2]"], 
-//			["@ STRING", "$$ = ['_dickey', $2]"], 
-//			["@ NUMBER", "$$ = ['_dickey', $2]"]
 		],
 		"Ls": [
 			["L", "$$ = [$1]"], //newcall
@@ -109,7 +106,8 @@ var grammar = {
 		],
 		"Lss": [
 			["Ls", "$$ = $1"],
-			["Lss ExpUnit", "$$ = $1; $1.push($2)"]
+			["Lss ExpUnit", "$$ = $1; $1.push($2)"],
+			["Lss ( Exp )", "$$ = $1; $1.push($3)"]
 		],
 		"ExpEx": [
 			["Exp", "$$ = $1"],
@@ -123,13 +121,18 @@ var grammar = {
 			[";", "$$ = [];"]
 		],
 		"Exp": [//sentence
-			["( Exp )", "$$ = ['_newcall', $2]"],
+			["( Exp )", "$$ = $2"],
+			["[ Array ]", "$$ = ['_array', $2]"],
 			["Lss", "$$ = ['_newcall', $1]"],
 			[": ExpUnit", "$$ = ['_function', $2]"],
-//			["Lss Precall", "$$ = ['_newcall', $1, $2]"],
-//			["ExpUnit", "$$ = $1"],
 			["Op", "$$ = $1"],
 			["Native", "$$ = $1"]
+		],
+		"GetOp": [
+			["Exp . ID", "$$ = ['_op', 'get', $1, ['_string', $3]]"],
+			["Exp . STRING", "$$ = ['_op', 'get', $1, ['_string', $3]]"],
+			["Exp . NUMBER", "$$ = ['_op', 'get', $1, ['_string', $3]]"],
+			["Exp . ( Exp )", "$$ = ['_op', 'get', $1, $4]"]
 		],
 		"Op": [
 			["! Exp", "$$ = ['_op', 'not', $2]"],
@@ -138,7 +141,7 @@ var grammar = {
 			["Exp + Exp", "$$ = ['_op', 'plus', $1, $3]"],
 			["Exp - Exp", "$$ = ['_op', 'minus', $1, $3]"],
 			["Exp < Exp", "$$ = ['_op', 'less', $1, $3]"],
-			["Exp . Exp", "$$ = ['_op', 'get', $1, $3]"]
+			["GetOp", "$$ = $1"]
 //			["Exp =~ Exp", "$$ = ['_op', 'match', $1, $3]"]
 //			["Exp =? Exp", "$$ = ['_op', 'default', $1, $3]"],
 //			["Exp =: Exp", "$$ = ['_op', 'proto', $1, $3]"],
@@ -164,12 +167,11 @@ var grammar = {
 		"Precall": [
 			["[ ExpList ]", "$$ = ['_precall', $2]"],
 			["[ ]", "$$ = ['_precall', []]"]
-		]
-/*
+		],
  		"Array": [
 			["Exp", "$$ = [$1]"],
 			["Array , Exp", "$$ = $1, $1.push($3)"]
-		],
+		]/*,
 		"Prop": [
 			["L : ", "$$ = $1"],
 			["( Exp ) :", "$$ = $2"]
