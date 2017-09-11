@@ -22,11 +22,9 @@ switch(cmd){
 	var str = fs.readFileSync(arg1).toString();
 	context.code = str;
 	if(cmd == "gen"){
-		var lang = process.argv[4] || "nodejs";
-		context.code = ":{ @main = :{ "+context.code+" }; arch = Arch." + lang + "; mount = 'gen'; gen }";
-	}else{
-		context.code = ":{ "+context.code+" }";
+		context.gen = {arch: "nodejs", mount: "gen"};
 	}
+	context.code = ":{ "+context.code+" }";
 	d(context);	
 	break;
 

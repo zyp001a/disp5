@@ -110,7 +110,7 @@ var grammar = {
 			["Lss ( Exp )", "$$ = $1; $1.push($3)"]
 		],
 		"ExpEx": [
-			["Exp", "$$ = $1"],
+			["Exp", "$$ = ['_normalcall', $1]"],
 			["@ Exp", "$$ = ['_precall', $2]"]
 		],
 		"ExpList": [
@@ -123,7 +123,7 @@ var grammar = {
 		"Exp": [//sentence
 			["( Exp )", "$$ = $2"],
 			["[ Array ]", "$$ = ['_array', $2]"],
-			["Lss", "$$ = ['_newcall', $1]"],
+			["Lss", "if($1.length == 1) $$ = $1[0]; else $$ = ['_newcall', $1]"],
 			[": ExpUnit", "$$ = ['_function', $2]"],
 			["Op", "$$ = $1"],
 			["Native", "$$ = $1"]

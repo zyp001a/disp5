@@ -1,1 +1,1 @@
-`console.log("print:");console.log($0);`
+`console.log("print:");console.log($$[0]);`

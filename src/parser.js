@@ -107,11 +107,14 @@ break;
 case 8: case 10:
 this.$ = $$[$0-1]; $$[$0-1].push($$[$0])
 break;
-case 9: case 12: case 23: case 24: case 34:
+case 9: case 23: case 24: case 34:
 this.$ = $$[$0]
 break;
 case 11:
 this.$ = $$[$0-3]; $$[$0-3].push($$[$0-1])
+break;
+case 12:
+this.$ = ['_normalcall', $$[$0]]
 break;
 case 13:
 this.$ = ['_precall', $$[$0]]
@@ -135,7 +138,7 @@ case 20:
 this.$ = ['_array', $$[$0-1]]
 break;
 case 21:
-this.$ = ['_newcall', $$[$0]]
+if($$[$0].length == 1) this.$ = $$[$0][0]; else this.$ = ['_newcall', $$[$0]]
 break;
 case 22:
 this.$ = ['_function', $$[$0]]
