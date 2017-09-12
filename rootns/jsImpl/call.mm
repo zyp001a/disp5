@@ -1,1 +1,1 @@
-`return callfunc(newcall(self, $[0], $$[1]))`
+`return callfunc(newcall(self, _getref($[0]), $$[1]), self)`

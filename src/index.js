@@ -32,7 +32,8 @@ module.exports = function(config, fn){
 	var mainfunc = analyze(userns, ast);
 	var maincall = newcall(userns, mainfunc, argarr);
 	newref(userns, "main", mainfunc);
-	var result = callfunc(maincall);
+	var env = newcpt(userns, "Env");
+	var result = callfunc(maincall, env);
 	if(config.gen){
 		gennodejs(result, config.gen)
 	}
@@ -42,6 +43,9 @@ function gc(cpt, key, config){
 	if(!config) config = {};
 	if(key in cpt.ref){
 		return cpt.ref[key];
+	}
+	if(isproto(cpt, "Array") && Number(key) >=0){
+		return cpt.value.value[key]
 	}
 
 	var rcpt, pns;
@@ -53,6 +57,7 @@ function gc(cpt, key, config){
 			rcpt = newref(cpt, key, analyze(cpt, ast));
 		else
 			rcpt = newref(cpt, key);
+		rcpt._old = 1;
 	}
 	if(config.assignable){
 		if(rcpt) return rcpt;
@@ -129,7 +134,7 @@ function isproto(cpt, tarkey){
 	}
 	if(tarkey == "Ref") return 0;
 	if(isproto(cpt, "Ref")){
-		var ref = _get(cpt, "ref");
+		var ref = _getref(cpt);
 		if(ref)
 			return isproto(ref, tarkey);
 	}
@@ -143,7 +148,7 @@ function isparent(cpt, tarkey){
 	}
 
 	if(isproto(cpt, "Ref")){
-		var ref = _get(cpt, "ref");
+		var ref = _getref(cpt);
 		if(ref)
 			return isparent(ref, tarkey);
 	}
@@ -175,13 +180,22 @@ function newcall(ns, refcpt, argarr){
 		die("wrong newcall");
 
 	var fcpt = _getref(refcpt);
-	if(!fcpt || (!isproto(fcpt, "Function") && !isproto(fcpt, "Native"))){
+
+	if(!fcpt){
 		console.log(refcpt)
 		console.log(fcpt)
 		die(refcpt.name +" is not function, use 'call *' for dynamic function");
 	}
+
 	var cpt = newcpt(ns, "Call");
-	cpt.call = [fcpt, argarr, refcpt];
+	if(refcpt._new || (!isproto(fcpt, "Function") && !isproto(fcpt, "Native")) ){
+		var callcpt = gc(ns, "call", {limit:2});
+		var argcpt = newcpt(ns, "Array")
+		argcpt.value = argarr;
+		cpt.call = [_getref(callcpt), [refcpt, argcpt], callcpt];
+	}else{
+		cpt.call = [fcpt, argarr, refcpt];
+	}
 	setlink(cpt, fcpt);
 /*
 	if(isproto(fcpt, "Precall")){
@@ -214,8 +228,8 @@ function analyze(ns, ast){
 
 		case "_precall":
 		var callcpt = analyze(ns, e);
-		setparent(callcpt, "Precall");
-		callfunc(callcpt);
+		setparent(callcpt, gc(ns, "Precall", {limit:2}));
+		callfunc(callcpt, ns);
 		if(!ns.precall) ns.precall = [];
 		ns.precall.push(callcpt);
 		cpt = undefined;
@@ -267,10 +281,26 @@ function analyze(ns, ast){
 		break;
 
 		case "_id":
-		if(ast.assignable)
-			cpt = gc(ns, e, {limit:2, assignable:1});
-		else
-			cpt = gc(ns, e, {limit:2});
+		if(e[0] == "$"){
+			//Arguments
+			var arg = e.substr(1);
+			if(arg != ""){
+				cpt = analyze(ns, ['_op', 'get', ['_id', 'arguments'], ['_string', arg]]);
+			}else{
+				cpt = analyze(ns, ['_id', 'arguments']);
+			}
+		}else{
+//set function name space
+			if(ast.assignable){
+				cpt = gc(ns, e, {limit:2, assignable:1});
+				if(!cpt._old)
+					cpt = newcall(ns, gc(ns, "idAssignable", {limit:2}), [raw2cpt(ns, e)]);
+			}else{
+				cpt = gc(ns, e, {limit:2});
+				if(!cpt._old)
+					cpt = newcall(ns, gc(ns, "id", {limit:2}), [raw2cpt(ns, e)]);
+			}
+		}
 		break;
 
 		case "_string":
@@ -295,6 +325,8 @@ function analyze(ns, ast){
 			if(ast[2][0] == "_op" && ast[2][1] == "get")
 				ast[2][1] = "getAssignable";
 		}
+//		if(ast[2][1] == "arguments")
+//			console.log(ast[2])
 		var left = analyze(ns, ast[2]);
 		var right;
 		if(ast[3]) right = analyze(ns, ast[3]);
@@ -368,7 +400,7 @@ function _get(cpt, tar){
 	}
 		
 }
-function callnative(cpt, func, argvp){
+function callnative(env, func, argvp){
 	var v = func.value;
 	var ns = {
 		assign: assign,
@@ -379,8 +411,7 @@ function callnative(cpt, func, argvp){
 		newcall: newcall,
 //		gen: gen,
 		gc: gc,
-		ns: cpt.from,
-		self: cpt,
+		self: env,
 		$: [],
 		$$: []
 	}
@@ -427,21 +458,21 @@ function genfunc(cpt, config){
 	
 
 }
-function procarg(arg){
+function procarg(arg, ns){
 	if(isproto(arg, "Call")){
-		return callfunc(arg).value;
+		return callfunc(arg, ns).value;
 	}else if(isproto(arg, "Array")){
 		var res = newcpt(arg, "Array");
 		res.value = [];
 		for(var j in arg.value){
-			res.value[j] = procarg(arg.value[j]);
+			res.value[j] = procarg(arg.value[j], ns);
 		}
 		return res;
 	}else{
 		return arg;
 	}	
 }
-function callfunc(cpt){
+function callfunc(cpt, env){
 	var tcall = _get(cpt, "call");
 	if(!tcall){
 		console.log(cpt)
@@ -451,29 +482,36 @@ function callfunc(cpt){
 	var argv = tcall[1];
 	var argvp = [];
 	for(var i in argv){
-		argvp[i] = procarg(argv[i]);
+		argvp[i] = procarg(argv[i], env);
 	}
+//	setparent(env, func);
+	var argcpt = newcpt(cpt, "Array");
+	argcpt.value = argvp;
+	newref(env, "arguments", argcpt);
 
 	var printstr = "";
 	for(var i in argvp){
 		printstr += argvp[i].path + ",";
 	}
-	console.log("call: " + tcall[2].path + "\n\t" + printstr);
+	console.log("call:  " + env.path +" "+  tcall[2].path + "\n\t" + printstr);
 
 	cpt.cpt = [];
 	var result;
 	if(isproto(func, "Native")){
-		var resultstr = callnative(cpt, func, argvp);
+		var resultstr = callnative(env, func, argvp);
 		if(typeof resultstr != "object")
 			result = raw2cpt(cpt, resultstr);
 		else
 			result = resultstr;
 		cpt.cpt.push(result.value);
 	}else{
+		var newenv = newcpt(env, "Env");
+		setparent(newenv, env);
+		setparent(newenv, func);
 		var step = _get(func, "block");
 		for(var i in step){
 			var scpt = step[i];
-			var tmpcpt = callfunc(scpt);
+			var tmpcpt = callfunc(scpt, newenv);
 			cpt.cpt.push(tmpcpt.value);
 			if(isproto(tmpcpt, "return")){
 				result = tmpcpt.value;
