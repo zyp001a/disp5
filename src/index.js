@@ -284,7 +284,7 @@ function analyze(ns, ast){
 		if(e[0] == "$"){
 			//Arguments
 			var arg = e.substr(1);
-			if(arg != ""){
+			if(arg != ""){ //for arguments
 				cpt = analyze(ns, ['_op', 'get', ['_id', 'arguments'], ['_string', arg]]);
 			}else{
 				cpt = analyze(ns, ['_id', 'arguments']);
@@ -301,6 +301,9 @@ function analyze(ns, ast){
 					cpt = newcall(ns, gc(ns, "id", {limit:2}), [raw2cpt(ns, e)]);
 			}
 		}
+		console.log("!")
+		console.log(ast)
+		console.log(cpt)
 		break;
 
 		case "_string":
