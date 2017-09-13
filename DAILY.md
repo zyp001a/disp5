@@ -127,6 +127,26 @@ Ns is used only for archive
 Part
 gc: read?write? part?
 
+# 9.13
+namespace guide
+rootns
+ userns
 
+ $Env0 
+
+newcall func args
+docallFunction call env
+ newenv from env
+ arguments set in newenv
+docallBlock call env 
+ no newenv
+
+block: call at defined env;
+function: call at new env;
+natives are functions
+
+a = new Server {
+ port = 80
+}
 
 

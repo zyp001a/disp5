@@ -123,15 +123,16 @@ var grammar = {
 		"Exp": [//sentence
 			["( Exp )", "$$ = $2"],
 			["[ Array ]", "$$ = ['_array', $2]"],
+			["[ ]", "$$ = ['_array', []]"],
 			["Lss", "if($1.length == 1) $$ = $1[0]; else $$ = ['_newcall', $1]"],
-			[": ExpUnit", "$$ = ['_function', $2]"],
+			["ExpUnit", "$$ = $1"],
 			["Op", "$$ = $1"],
 			["Native", "$$ = $1"]
 		],
 		"GetOp": [
-			["Exp . ID", "$$ = ['_op', 'get', $1, ['_string', $3]]"],
-			["Exp . STRING", "$$ = ['_op', 'get', $1, ['_string', $3]]"],
-			["Exp . NUMBER", "$$ = ['_op', 'get', $1, ['_string', $3]]"],
+			["Exp . ID", "$$ = ['_op', 'get', $1, ['_internal', $3]]"],
+			["Exp . STRING", "$$ = ['_op', 'get', $1, ['_internal', $3]]"],
+			["Exp . NUMBER", "$$ = ['_op', 'get', $1, ['_internal', $3]]"],
 			["Exp . ( Exp )", "$$ = ['_op', 'get', $1, $4]"]
 		],
 		"Op": [
@@ -149,17 +150,19 @@ var grammar = {
 //			["Exp -> Exp", "$$ = ['_op', 'link', $1, $3]"]
 		],
 		"ExpUnit": [
-			["Braket", "$$ = ['_block', $1]"],
-			["Brace", "$$ = ['_block', $1, 'function']"]
+			[": Brace", "$$ = ['_function', $2]"],
+			["Brace", "$$ = ['_block', $1]"]
 //			[": ID Braket", "$$ = ['_newcpt', $3, 'Function', $2]"],
 //			["^ Braket", "$$ = ['_newcpt', $2, 'Cpt']"],
 //			["^ : ID Braket", "$$ = ['_newcpt', $4, 'Cpt', $3]"],
 //			["^ ID : ID Braket", "$$ = ['_newcpt', $5, $2, $4]"]
 		],
+/*
 		"Braket": [
 			["[ ExpList ]", "$$ = $2"],
 			["[ ]", "$$ = []"]
 		],
+*/
 		"Brace": [
 			["{ ExpList }", "$$ = $2"],
 			["{ }", "$$ = []"]

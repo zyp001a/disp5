@@ -18,26 +18,37 @@ var topersist= {};
 var userns;
 module.exports = function(config, fn){
 	console.log("#Disp version: "+ version);
-//	userns = bootstrap(config);
-	var argarr = [];
-	for(var i=1; i<process.argv.length; i++){
-		argarr.push(raw2cpt(rootns, process.argv[i]));
-	}
-	var userns = newref(rootns, config.user, newcpt(rootns, "Ns"));
-	var ast = parse(config.code);
 	rootns.link.jsImpl = newref(rootns, "jsImpl", newcpt(rootns, "Ns"));
+	userns = newref(rootns, config.user, newcpt(rootns, "Ns"));
+	var env = newcpt(userns, "Env");
 	if(config.gen){
 		userns.link.js = newref(rootns, "js", newcpt(rootns, "Ns"));
+		rootns.link.js = newref(rootns, "js", newcpt(rootns, "Ns"));
 	}
-	var mainfunc = analyze(userns, ast);
-	var maincall = newcall(userns, mainfunc, argarr);
-	newref(userns, "main", mainfunc);
-	var env = newcpt(userns, "Env");
-	var result = callfunc(maincall, env);
+	if(config.trans){
+		var str = render(config.code, env);
+		fs.writeFileSync(config.trans, str);
+		return;
+	}
+	var argarr = [];
+	for(var i=1; i<process.argv.length; i++){
+		argarr.push(raw2cpt(userns, process.argv[i]));
+	}
+	var ast = parse(config.code);
+	var func = analyze(userns, ast);
+	var call = newcall(func, argarr);
+	var result = docall(call, env);
 	if(config.gen){
-		gennodejs(result, config.gen)
+		gennodejs(result, config.gen);
 	}
 	archive();
+}
+function _eval(code, env){
+	code = "{" + code + "}";
+	var ast = parse(code);
+	var func = analyze(rootns, ast);
+	var result = doexec(func, env);
+	return result;
 }
 function gc(cpt, key, config){
 	if(!config) config = {};
@@ -45,12 +56,21 @@ function gc(cpt, key, config){
 		return cpt.ref[key];
 	}
 	if(isproto(cpt, "Array") && Number(key) >=0){
-		return cpt.value.value[key]
+		return cpt.value.value[key];
 	}
 
 	var rcpt, pns;
-	var f = __dirname + "/../"+ cpt.path + "/" + key + ".mm";		
-	if(fs.existsSync(f)){
+	var f = __dirname + "/../"+ cpt.path + "/" + key + ".mm";
+	var f2 = __dirname + "/../"+ cpt.path + "/" + key + ".tpl";
+	if(fs.existsSync(f2)){
+		var str = fs.readFileSync(f2).toString();
+		var funccpt = newcpt(cpt, "Function");
+		funccpt.block = [
+			newcall(gc(rootns, "render", {limit:2}), [raw2cpt(cpt, str)])
+		]
+		rcpt = newref(cpt, key, funccpt);
+		rcpt._old = 1;
+	}else if(fs.existsSync(f)){
 		var str = fs.readFileSync(f).toString();
 		var ast = parse(str);
 		if(ast)
@@ -101,12 +121,6 @@ function gc(cpt, key, config){
 	if(!rcpt){
 		rcpt = newref(cpt, key);
 	}
-/*else if(!isproto(cpt, "Shadow")){
-		var tmpcpt = newcpt(cpt, proto, key);
-		setproto(tmpcpt, rcpt);
-		rcpt = tmpcpt;
-	}
-*/
 	return rcpt;
 }
 
@@ -175,7 +189,7 @@ function parse(src){
 	if(src == undefined || src == null || src == "") return;
 	return parser.parse(src);
 }
-function newcall(ns, refcpt, argarr){
+function newcall(refcpt, argarr){
 	if(!refcpt)
 		die("wrong newcall");
 
@@ -187,7 +201,8 @@ function newcall(ns, refcpt, argarr){
 		die(refcpt.name +" is not function, use 'call *' for dynamic function");
 	}
 
-	var cpt = newcpt(ns, "Call");
+	var cpt = newcpt(rootns, "Call");
+/*
 	if(refcpt._new || (!isproto(fcpt, "Function") && !isproto(fcpt, "Native")) ){
 		var callcpt = gc(ns, "call", {limit:2});
 		var argcpt = newcpt(ns, "Array")
@@ -196,14 +211,9 @@ function newcall(ns, refcpt, argarr){
 	}else{
 		cpt.call = [fcpt, argarr, refcpt];
 	}
-	setlink(cpt, fcpt);
-/*
-	if(isproto(fcpt, "Precall")){
-		var pfcpt = argarr.shift();
-		callfunc(newcall(ns, pfcpt, argarr));
-		cpt = undefined;
-	}
 */
+	cpt.call = [fcpt, argarr, refcpt];
+	setlink(cpt, fcpt);
 	return cpt;
 }
 function analyze(ns, ast){
@@ -213,19 +223,26 @@ function analyze(ns, ast){
 	switch(c){
 
 		case "_block":
+		cpt = newcpt(ns, "Block");
 		var arr = [];
 		for(var i in e){
-			var argcpt;
-			if(ast[2])
-				argcpt = analyze(ast.func, e[i]);
-			else
-				argcpt = analyze(ns, e[i]);
-			if(argcpt)
-				arr.push(argcpt);
+			var argcpt = analyze(ns, e[i]);
+			arr.push(argcpt)
 		}
-		ast.func.block = arr;
+		cpt.block = arr;
 		break;
 
+		case "_function":
+		cpt = newcpt(ns, "Function");
+		var arr = [];
+		for(var i in e){
+			var argcpt = analyze(cpt, e[i]);
+			arr.push(argcpt)
+		}
+		cpt.block = arr;
+		break;
+
+/*
 		case "_precall":
 		var callcpt = analyze(ns, e);
 		setparent(callcpt, gc(ns, "Precall", {limit:2}));
@@ -234,11 +251,11 @@ function analyze(ns, ast){
 		ns.precall.push(callcpt);
 		cpt = undefined;
 		break;
-
+*/
 		case "_normalcall":
 		var callcpt = analyze(ns, e);
 		if(!isproto(callcpt, "Call")){
-			cpt = newcall(ns, gc(ns, "return", {limit:2}), [callcpt]);
+			cpt = newcall(gc(ns, "return", {limit:2}), [callcpt]);
 		}else{
 			cpt = callcpt;
 		}
@@ -247,17 +264,21 @@ function analyze(ns, ast){
 		case "_newcall"://action
 		var fcpt = analyze(ns, e[0]);
 		if(e.length > 1){
+
 			var argarr = [];
 			for(var i=1; i<e.length; i++){
-				if(e[i][0] == "_block"){
-					e[i].func = fcpt;
-					analyze(ns, e[i]);
-				}else{
-					var argcpt	= analyze(ns, e[i]);	
-					argarr.push(argcpt);
-				}
+				var argcpt	= analyze(ns, e[i]);	
+				argarr.push(argcpt);
 			}
-			cpt = newcall(ns, fcpt, argarr);
+			if(fcpt._new || 
+				 (!isproto(fcpt, "Function") && !isproto(fcpt, "Native")) ){
+				var callcpt = gc(ns, "call", {limit:2});
+				var argcpt = newcpt(ns, "Array");
+				argcpt.value = argarr;
+				cpt = newcall(callcpt, [fcpt, argcpt]);
+			}else{
+				cpt = newcall(fcpt, argarr);
+			}
 		}else{
 			die("error, newcall")
 			cpt = fcpt;
@@ -272,47 +293,43 @@ function analyze(ns, ast){
 		}
 		break;
 
-		case "_function":
-		cpt = newcpt(ns, "Function");
-		if(e[0] == "_block"){
-			e.func = cpt;
-			analyze(ns, e);
-		}
-		break;
-
 		case "_id":
 		if(e[0] == "$"){
 			//Arguments
 			var arg = e.substr(1);
 			if(arg != ""){ //for arguments
-				cpt = analyze(ns, ['_op', 'get', ['_id', 'arguments'], ['_string', arg]]);
+				cpt = analyze(rootns, ['_op', 'get', ['_id', 'arguments'], ['_internal', arg]]);
 			}else{
-				cpt = analyze(ns, ['_id', 'arguments']);
+				cpt = analyze(rootns, ['_id', 'arguments']);
 			}
 		}else{
 //set function name space
 			if(ast.assignable){
 				cpt = gc(ns, e, {limit:2, assignable:1});
-				if(!cpt._old)
-					cpt = newcall(ns, gc(ns, "idAssignable", {limit:2}), [raw2cpt(ns, e)]);
+				if(!cpt._old){
+					var ncpt = newcall(gc(ns, "idAssignable", {limit:2}), [raw2cpt(ns, e)]);
+					ncpt._proto = cpt;
+					cpt = ncpt;
+				}
 			}else{
 				cpt = gc(ns, e, {limit:2});
-				if(!cpt._old)
-					cpt = newcall(ns, gc(ns, "id", {limit:2}), [raw2cpt(ns, e)]);
+				if(!cpt._old){
+					var ncpt = newcall(gc(ns, "id", {limit:2}), [raw2cpt(ns, e)]);
+					ncpt._proto = cpt;
+					cpt = ncpt;
+				}
 			}
 		}
-		console.log("!")
-		console.log(ast)
-		console.log(cpt)
+
 		break;
 
 		case "_string":
-		cpt = newcpt(ns, "String");
-		cpt.value = e;
+		case "_number":
+		cpt = newcall(gc(ns, "raw", {limit:2}), [raw2cpt(ns, e)]);
 		break;
 
-		case "_number":
-		cpt = newcpt(ns, "Number");
+		case "_internal":
+		cpt = newcpt(ns);
 		cpt.value = e;
 		break;
 
@@ -331,9 +348,12 @@ function analyze(ns, ast){
 //		if(ast[2][1] == "arguments")
 //			console.log(ast[2])
 		var left = analyze(ns, ast[2]);
+		if(e == "get"){
+			setproto(left._proto, gc(rootns, "Hash", {limit:2}));
+		}
 		var right;
 		if(ast[3]) right = analyze(ns, ast[3]);
-		cpt = newcall(ns, gc(ns, e, {
+		cpt = newcall(gc(ns, e, {
 			limit:2
 		}), [left, right]);
 		break;
@@ -350,7 +370,14 @@ function getv(ns, refname){
 	if(tref) return tref.value;
 	else return;
 }
+function printtree(env){
+	for(var key in env.ns.Env){
+		printtree(env.ns.Env[key])
+	}
+}
 function gennodejs(result, config){
+	var refs = result.call[0].ref;
+	console.log(refs);
 	var mainstr = ""
 	for(var i in result.cpt){
 		 mainstr+= result.cpt[i].value + "\n"
@@ -410,8 +437,9 @@ function callnative(env, func, argvp){
 		setproto: setproto,
 		setparent: setparent,
 		isproto: isproto,
-		callfunc: callfunc,
+		docall: docall,
 		newcall: newcall,
+		render: render,
 //		gen: gen,
 		gc: gc,
 		self: env,
@@ -463,7 +491,7 @@ function genfunc(cpt, config){
 }
 function procarg(arg, ns){
 	if(isproto(arg, "Call")){
-		return callfunc(arg, ns).value;
+		return docall(arg, ns).value;
 	}else if(isproto(arg, "Array")){
 		var res = newcpt(arg, "Array");
 		res.value = [];
@@ -475,7 +503,19 @@ function procarg(arg, ns){
 		return arg;
 	}	
 }
-function callfunc(cpt, env){
+function doexec(func, env){
+	func.cpt = [];
+	var result;
+	var step = _get(func, "block");
+	for(var i in step){
+		var scpt = step[i];
+		var tmpcpt = docall(scpt, env);
+		func.cpt.push(tmpcpt.value);
+		result = tmpcpt;
+	}
+	return result;
+}
+function docall(cpt, env){
 	var tcall = _get(cpt, "call");
 	if(!tcall){
 		console.log(cpt)
@@ -488,41 +528,49 @@ function callfunc(cpt, env){
 		argvp[i] = procarg(argv[i], env);
 	}
 //	setparent(env, func);
-	var argcpt = newcpt(cpt, "Array");
-	argcpt.value = argvp;
-	newref(env, "arguments", argcpt);
 
 	var printstr = "";
-	for(var i in argvp){
-		printstr += argvp[i].path + ",";
+	for(var i in argvp){	
+		if(argvp[i].proto.String)
+			printstr += argvp[i].path + ":" +  argvp[i].value + ",";
+		else
+			printstr += argvp[i].path + ",";
 	}
 	console.log("call:  " + env.path +" "+  tcall[2].path + "\n\t" + printstr);
 
 	cpt.cpt = [];
 	var result;
-	if(isproto(func, "Native")){
-		var resultstr = callnative(env, func, argvp);
-		if(typeof resultstr != "object")
-			result = raw2cpt(cpt, resultstr);
-		else
-			result = resultstr;
-		cpt.cpt.push(result.value);
-	}else{
+	if(isproto(func, "Native") || isproto(func, "Function")){
 		var newenv = newcpt(env, "Env");
 		setparent(newenv, env);
 		setparent(newenv, func);
-		var step = _get(func, "block");
-		for(var i in step){
-			var scpt = step[i];
-			var tmpcpt = callfunc(scpt, newenv);
-			cpt.cpt.push(tmpcpt.value);
-			if(isproto(tmpcpt, "return")){
-				result = tmpcpt.value;
-				break;
-			}else{
-				result = tmpcpt;
+
+		var argcpt = newcpt(cpt, "Array");
+		argcpt.value = argvp;
+		newref(newenv, "arguments", argcpt);
+		if(isproto(func, "Native")){
+			var resultstr = callnative(newenv, func, argvp);
+			if(typeof resultstr != "object")
+				result = raw2cpt(cpt, resultstr);
+			else
+				result = resultstr;
+			cpt.cpt.push(result.value);
+		}else if(isproto(func, "Function")){
+			var step = _get(func, "block");
+			for(var i in step){
+				var scpt = step[i];
+				var tmpcpt = docall(scpt, newenv);
+				cpt.cpt.push(tmpcpt.value);
+				if(isproto(tmpcpt, "return")){
+					result = tmpcpt.value;
+					break;
+				}else{
+					result = tmpcpt;
+				}
 			}
 		}
+	}else{
+		die("not Function or Native")
 	}
 	if(isproto(result, "Call"))
 		cpt.value = result.value;
@@ -657,4 +705,74 @@ function mkdirpSync (p, opts, made) {
     }
   }
   return made;
+}
+function render(str, env){
+// init data
+	if(!env){
+		die("render error not env")
+	};
+	var win, wout;
+	var evalstr = "arrayDump=[];push arrayDump '";
+	var originstr = str.replace(/\r/g,"");
+		//		str = str.
+		//			replace(/\s*(\^\^[^=]((?!\$\$).)*\$\$)\s*/g, "$1");
+		//replace multiple line [\s but not \n]* [^^] [not =] [not $$]* [$$] [\s*\n] 
+	originstr.split(/[\t ]*\^\^(?!=)|\^\^(?==)/).forEach(function(sub, i){
+		if(i==0){
+			win = "";
+			wout = sub || "";
+		}else{
+			var subs;
+			if(sub[0] == '=')
+				subs = sub.split(/\$\$/);
+			else
+				subs = sub.split(/\$\$[ \t]*/);
+			win = subs[0];
+			wout = subs[1] || "";
+			if(!win || win[0] != '=') 
+				if(wout[0] == '\n')
+					wout = wout.substr(1);
+		}	
+		wout = wout
+			.replace(/\\([\$\^])/g, "$1") //\$ \^ -> $ ^
+			.replace(/\\/g, "\\\\")
+//			.replace(/([\[\]\{\}'])/g, "\\$1")
+			.replace(/\n/g, "\\n");
+		
+
+		if(win && win[0] == '='){
+			var ms;
+//automatic init
+/*
+				if((ms=win.match(/^=([A-Za-z0-9-]+)$/)))
+					if(data[ms[1]] === undefined){
+						data[ms[1]] = "";
+					}
+*/
+//eval def
+/*
+				if((ms=win.match(/^=~(.*)$/))){
+					if(ms[1].match(/:/)){
+						win = win.replace(/~(.+)/,"$.eval({$1})");
+					}else{
+						win = win.replace(/~(.+)/,"$.eval($1)");
+					}
+				}
+*/
+			evalstr += (win.replace(/^=(.+)/, "';push arrayDump $1; push arrayDump '") + wout);
+		}else{
+//eval def
+/*
+				if(win.match(/~$/)){
+					evalstr+=("');" +win.replace(/~$/, "'")+wout+"';p.push('");
+				}else{
+					evalstr+=("');"+win+";p.push('"+wout);
+				}
+*/
+			evalstr+=("';"+win+";push arrayDump '"+wout);
+		}
+	});
+	evalstr+="';join arrayDump ''";
+	var res = _get(_getref(_eval(evalstr, env).value), 'value');
+	return res;
 }

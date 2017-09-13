@@ -19,12 +19,17 @@ if((matched = args.match(/-l\s*(\S+)/))){
 switch(cmd){
 	case "run":
 	case "gen":
+	case "trans":
 	var str = fs.readFileSync(arg1).toString();
 	context.code = str;
-	if(cmd == "gen"){
-		context.gen = {arch: "nodejs", mount: "gen"};
+	if(cmd == "trans"){
+		context.trans = arg1.replace(/\.tpl$/, "");
+	}else{
+		context.code = ":{ "+context.code+" }";
+		if(cmd == "gen"){
+			context.gen = {arch: "nodejs", mount: "gen"};
+		}
 	}
-	context.code = ":{ "+context.code+" }";
 	d(context);	
 	break;
 
@@ -32,6 +37,7 @@ switch(cmd){
 	context.code = args;
 	d(context);
 	break;
+
 	
 	case "help":
 	console.log("Basic usage: disp run [file]");
