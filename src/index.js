@@ -56,7 +56,7 @@ function gc(cpt, key, config){
 		return cpt.ref[key];
 	}
 	if(isproto(cpt, "Array") && Number(key) >=0){
-		return cpt.value.value[key];
+		return cpt.value[key];
 	}
 
 	var rcpt, pns;
@@ -190,8 +190,9 @@ function parse(src){
 	return parser.parse(src);
 }
 function newcall(refcpt, argarr){
-	if(!refcpt)
+	if(!refcpt){
 		die("wrong newcall");
+	}
 
 	var fcpt = _getref(refcpt);
 
@@ -227,7 +228,7 @@ function analyze(ns, ast){
 		var arr = [];
 		for(var i in e){
 			var argcpt = analyze(ns, e[i]);
-			arr.push(argcpt)
+			arr.push(argcpt);
 		}
 		cpt.block = arr;
 		break;
@@ -253,6 +254,7 @@ function analyze(ns, ast){
 		break;
 */
 		case "_normalcall":
+		console.log(e)
 		var callcpt = analyze(ns, e);
 		if(!isproto(callcpt, "Call")){
 			cpt = newcall(gc(ns, "return", {limit:2}), [callcpt]);
@@ -349,7 +351,8 @@ function analyze(ns, ast){
 //			console.log(ast[2])
 		var left = analyze(ns, ast[2]);
 		if(e == "get"){
-			setproto(left._proto, gc(rootns, "Hash", {limit:2}));
+			if(left._proto.value == undefined)
+				left._proto.value = newcpt(ns, "Hash");
 		}
 		var right;
 		if(ast[3]) right = analyze(ns, ast[3]);
@@ -377,7 +380,10 @@ function printtree(env){
 }
 function gennodejs(result, config){
 	var refs = result.call[0].ref;
-	console.log(refs);
+	for(var v in refs){
+		if(isproto(refs[v], "Hash"))
+			mainstr += "var "+v + " = {};";
+	}
 	var mainstr = ""
 	for(var i in result.cpt){
 		 mainstr+= result.cpt[i].value + "\n"
@@ -503,7 +509,8 @@ function procarg(arg, ns){
 		return arg;
 	}	
 }
-function doexec(func, env){
+function doexec(funcref, env){
+	var func = _getref(funcref);
 	func.cpt = [];
 	var result;
 	var step = _get(func, "block");
@@ -561,7 +568,7 @@ function docall(cpt, env){
 				var scpt = step[i];
 				var tmpcpt = docall(scpt, newenv);
 				cpt.cpt.push(tmpcpt.value);
-				if(isproto(tmpcpt, "return")){
+				if(tmpcpt.call[2].name == "return"){
 					result = tmpcpt.value;
 					break;
 				}else{
@@ -570,6 +577,8 @@ function docall(cpt, env){
 			}
 		}
 	}else{
+		console.log(func)
+		console.log(tcall[2].path)
 		die("not Function or Native")
 	}
 	if(isproto(result, "Call"))
@@ -621,12 +630,16 @@ function copycpt(ns, proto, cpt){
 	}
 }
 function newref(ns, key, ref){
-	var refcpt = newcpt(ns, "Ref", key);
+	var refcpt = rawcpt(key);
+	refcpt.path = ns.path + "/" + key;
+	refcpt.from = ns;
+	setproto(refcpt, gc(ns, "Ref", {limit:2}));
+	setparent(refcpt, ns);
 	ns.ref[key] = refcpt;
 	refcpt.value = ref;
 	return refcpt;
 }
-function newcpt(ns, proto, name){
+function newcpt(ns, proto){
 	if(!proto) proto = "Cpt";
 	if(typeof proto == "string"){
 		protocpt = gc(ns, proto, {limit:2});
@@ -634,9 +647,7 @@ function newcpt(ns, proto, name){
 		protocpt = proto;
 		proto = proto.name;
 	}
-	if(!name){
-		name = "$" + (proto || "name") + (ns.nexti++);
-	}
+	var	name = "$" + (proto || "name") + (ns.nexti++);
 	var cpt = rawcpt(name);
 	if(!(proto in ns.ns)){
 		ns.ns[proto] = {};
