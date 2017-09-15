@@ -14,7 +14,11 @@ var context = {
 }
 var matched;
 if((matched = args.match(/-l\s*(\S+)/))){
-	context.outlang = matched[1];
+	context.outlang = matched[1] + "Lang";
+}else if((matched = args.match(/-m\s*(\S+)/))){
+	context.mount = matched[1];
+}else if((matched = args.match(/-a\s*(\S+)/))){
+	context.arch = matched[1] + "Arch";
 }
 switch(cmd){
 	case "run":
@@ -23,11 +27,15 @@ switch(cmd){
 	var str = fs.readFileSync(arg1).toString();
 	context.code = str;
 	if(cmd == "trans"){
-		context.trans = arg1.replace(/\.tpl$/, "");
+		context.trans = 1;
+		if(!context.outlang) context.outlang = "nodejs";
+		context.outfile = arg1.replace(/\.tpl$/, "");
 	}else{
 		context.code = ":{ "+context.code+" }";
 		if(cmd == "gen"){
-			context.gen = {arch: "nodejs", mount: "gen"};
+			context.gen = 1;
+			if(!context.arch) context.arch = "nodejsLang";
+			if(!context.mount) context.mount = "gen";
 		}
 	}
 	d(context);	

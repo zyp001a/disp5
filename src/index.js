@@ -2,33 +2,41 @@ var version = "5.0.0";
 var fs = require("fs");
 var path = require("path");
 var parser = require("./parser");
-var tmpl = require("./tmpl");
 
 var rootns = rawcpt("rootns");
+//var Ref = rawcpt("Ref");
 rootns.path = "rootns";
-rootns.ref.rootns = rootns;
-rootns.ref.Ref = rawcpt("Ref");
-rootns.from = rootns;
-rootns.isroot = 1;
-rootns.link.init = newref(rootns, "init", newcpt(rootns, "Ns"));
+//rootns.ref.rootns = rootns;
+rootns._isroot = 1;
+//rootns.ref.Ref = Ref;
+//rootns.from = rootns;
+setlink(rootns, gc(rootns, "jsImpl"));
+setlink(rootns, gc(rootns, "init"));
+setlink(rootns, gc(rootns, "Lang"));
+setlink(rootns, gc(rootns, "Arch"));
+
 
 var tplcache = {};
 var codecache = {};
 var topersist= {};
 var userns;
+var userenv;
 module.exports = function(config, fn){
 	console.log("#Disp version: "+ version);
-	rootns.link.jsImpl = newref(rootns, "jsImpl", newcpt(rootns, "Ns"));
-	userns = newref(rootns, config.user, newcpt(rootns, "Ns"));
+	userns = gc(rootns, config.user);
+
 	var env = newcpt(userns, "Env");
+	userenv = env;
+	if(config.trans){
+		var lang = gc(userns, config.outlang);
+		setlink(userns, config.outlang);
+		var str = render(config.code, env);
+		fs.writeFileSync(config.outfile, str);
+		return;
+	}
 	if(config.gen){
 		userns.link.js = newref(rootns, "js", newcpt(rootns, "Ns"));
 		rootns.link.js = newref(rootns, "js", newcpt(rootns, "Ns"));
-	}
-	if(config.trans){
-		var str = render(config.code, env);
-		fs.writeFileSync(config.trans, str);
-		return;
 	}
 	var argarr = [];
 	for(var i=1; i<process.argv.length; i++){
@@ -39,7 +47,7 @@ module.exports = function(config, fn){
 	var call = newcall(func, argarr);
 	var result = docall(call, env);
 	if(config.gen){
-		gennodejs(result, config.gen);
+		gen(result, config.gen);
 	}
 	archive();
 }
@@ -58,19 +66,20 @@ function gc(cpt, key, config){
 	if(isproto(cpt, "Array") && Number(key) >=0){
 		return cpt.value[key];
 	}
-
 	var rcpt, pns;
 	var f = __dirname + "/../"+ cpt.path + "/" + key + ".mm";
 	var f2 = __dirname + "/../"+ cpt.path + "/" + key + ".tpl";
 	if(fs.existsSync(f2)){
+		console.log(f2)
 		var str = fs.readFileSync(f2).toString();
-		var funccpt = newcpt(cpt, "Function");
+		var funccpt = newcpt(cpt, "Function");//Render
 		funccpt.block = [
 			newcall(gc(rootns, "render", {limit:2}), [raw2cpt(cpt, str)])
 		]
 		rcpt = newref(cpt, key, funccpt);
 		rcpt._old = 1;
 	}else if(fs.existsSync(f)){
+		console.log(f)
 		var str = fs.readFileSync(f).toString();
 		var ast = parse(str);
 		if(ast)
@@ -104,7 +113,7 @@ function gc(cpt, key, config){
 		}
 	}
 
-	if(!rcpt && config.limit){
+	if(!rcpt && config.limit && !cpt._isroot){
 		for(var p in cpt.parent){
 			rcpt = gc(cpt.parent[p], key, {
 				limit: config.limit,
@@ -113,6 +122,10 @@ function gc(cpt, key, config){
 			if(rcpt)
 				break;
 		}
+		rcpt = gc(cpt.from, key, {
+			limit: config.limit,
+			notnew: 1
+		});
 	}
 
 	if(config.notnew)
@@ -125,7 +138,9 @@ function gc(cpt, key, config){
 }
 
 function raw2cpt(ns, raw){
-	if(raw == undefined || raw == null)
+	if(raw == undefined){
+		return gc(rootns, "Undefined", {limit:2})
+	}else if(raw == null)
 		return gc(rootns, "Null", {limit:2})
 	if(typeof raw == "string"){
 		var strcpt = newcpt(ns, "String");
@@ -141,30 +156,30 @@ function raw2cpt(ns, raw){
 
 function isproto(cpt, tarkey){
 	if(tarkey == "Cpt") return 1;
-	for(var key in cpt.proto){
-		if(tarkey == key) return 1;
-		if(isparent(cpt.proto[key], tarkey))
-			return 1;
-	}
-	if(tarkey == "Ref") return 0;
-	if(isproto(cpt, "Ref")){
+	if(cpt._isref){
 		var ref = _getref(cpt);
 		if(ref)
 			return isproto(ref, tarkey);
+	}else{
+		for(var key in cpt.proto){
+			if(tarkey == key) return 1;
+			if(isparent(cpt.proto[key], tarkey))
+				return 1;
+		}
 	}
 	return 0;
 }
 function isparent(cpt, tarkey){
-	for(var key in cpt.parent){
-		if(tarkey == key) return 1;
-		if(isparent(cpt.parent[key], tarkey))
-			return 1;
-	}
-
-	if(isproto(cpt, "Ref")){
+	if(cpt._isref){
 		var ref = _getref(cpt);
 		if(ref)
 			return isparent(ref, tarkey);
+	}else{
+		for(var key in cpt.parent){
+			if(tarkey == key) return 1;
+			if(isparent(cpt.parent[key], tarkey))
+				return 1;
+		}
 	}
 	return 0;
 }
@@ -201,18 +216,7 @@ function newcall(refcpt, argarr){
 		console.log(fcpt)
 		die(refcpt.name +" is not function, use 'call *' for dynamic function");
 	}
-
 	var cpt = newcpt(rootns, "Call");
-/*
-	if(refcpt._new || (!isproto(fcpt, "Function") && !isproto(fcpt, "Native")) ){
-		var callcpt = gc(ns, "call", {limit:2});
-		var argcpt = newcpt(ns, "Array")
-		argcpt.value = argarr;
-		cpt.call = [_getref(callcpt), [refcpt, argcpt], callcpt];
-	}else{
-		cpt.call = [fcpt, argarr, refcpt];
-	}
-*/
 	cpt.call = [fcpt, argarr, refcpt];
 	setlink(cpt, fcpt);
 	return cpt;
@@ -222,13 +226,13 @@ function analyze(ns, ast){
 	var e = ast[1];
 	var cpt;
 	switch(c){
-
 		case "_block":
-		cpt = newcpt(ns, "Block");
+		cpt = newcpt(ns);
 		var arr = [];
 		for(var i in e){
-			var argcpt = analyze(ns, e[i]);
-			arr.push(argcpt);
+			var argcpt = analyze(cpt, e[i]);
+			if(argcpt)
+				arr.push(argcpt);
 		}
 		cpt.block = arr;
 		break;
@@ -238,24 +242,23 @@ function analyze(ns, ast){
 		var arr = [];
 		for(var i in e){
 			var argcpt = analyze(cpt, e[i]);
-			arr.push(argcpt)
+			if(argcpt)
+				arr.push(argcpt)
 		}
 		cpt.block = arr;
 		break;
 
-/*
+
 		case "_precall":
-		var callcpt = analyze(ns, e);
-		setparent(callcpt, gc(ns, "Precall", {limit:2}));
-		callfunc(callcpt, ns);
-		if(!ns.precall) ns.precall = [];
-		ns.precall.push(callcpt);
-		cpt = undefined;
+		cpt = analyze(ns, e);
+		setproto(cpt, gc(ns, "Precall", {limit:2}));
 		break;
-*/
+
 		case "_normalcall":
-		console.log(e)
 		var callcpt = analyze(ns, e);
+/*		if(!callcpt){
+			cpt = undefined;
+		}else */
 		if(!isproto(callcpt, "Call")){
 			cpt = newcall(gc(ns, "return", {limit:2}), [callcpt]);
 		}else{
@@ -274,12 +277,19 @@ function analyze(ns, ast){
 			}
 			if(fcpt._new || 
 				 (!isproto(fcpt, "Function") && !isproto(fcpt, "Native")) ){
+//user defined function
 				var callcpt = gc(ns, "call", {limit:2});
 				var argcpt = newcpt(ns, "Array");
 				argcpt.value = argarr;
 				cpt = newcall(callcpt, [fcpt, argcpt]);
 			}else{
-				cpt = newcall(fcpt, argarr);
+//predefined function
+				if(isproto(fcpt, "Precall")){
+					argarr.unshift(ns);
+					cpt = docall(newcall(fcpt, argarr), userenv);
+				}else{
+					cpt = newcall(fcpt, argarr);
+				}
 			}
 		}else{
 			die("error, newcall")
@@ -347,13 +357,16 @@ function analyze(ns, ast){
 			if(ast[2][0] == "_op" && ast[2][1] == "get")
 				ast[2][1] = "getAssignable";
 		}
-//		if(ast[2][1] == "arguments")
-//			console.log(ast[2])
 		var left = analyze(ns, ast[2]);
-		if(e == "get"){
+//record proto
+/*
+		if(e == "get" || e== "getAssignable"){
 			if(left._proto.value == undefined)
 				left._proto.value = newcpt(ns, "Hash");
+		}else if(e == "assign"){
+			left._proto.value = newcpt(ns);
 		}
+*/
 		var right;
 		if(ast[3]) right = analyze(ns, ast[3]);
 		cpt = newcall(gc(ns, e, {
@@ -367,12 +380,7 @@ function analyze(ns, ast){
 	ast.cpt = cpt;
 	return cpt;
 }
-function getv(ns, refname){
-	var ref = gc(ns, "Ref", refname);
-	var tref = _getref(ref);
-	if(tref) return tref.value;
-	else return;
-}
+
 function printtree(env){
 	for(var key in env.ns.Env){
 		printtree(env.ns.Env[key])
@@ -418,10 +426,10 @@ function cpt2str(cpt){
 function extend(){
 }
 function _getref(cpt){
-	if(!isproto(cpt, "Ref")) return cpt;
+	if(!cpt._isref) return cpt;
 	var ref = _get(cpt, "value");
 	if(!ref) return;
-	if(!isproto(ref, "Ref"))
+	if(!ref._isref)
 		return ref;
 	else
 		return _getref(ref);
@@ -555,6 +563,8 @@ function docall(cpt, env){
 		var argcpt = newcpt(cpt, "Array");
 		argcpt.value = argvp;
 		newref(newenv, "arguments", argcpt);
+		newref(newenv, "self", func);
+		
 		if(isproto(func, "Native")){
 			var resultstr = callnative(newenv, func, argvp);
 			if(typeof resultstr != "object")
@@ -633,15 +643,17 @@ function newref(ns, key, ref){
 	var refcpt = rawcpt(key);
 	refcpt.path = ns.path + "/" + key;
 	refcpt.from = ns;
-	setproto(refcpt, gc(ns, "Ref", {limit:2}));
-	setparent(refcpt, ns);
+	refcpt._isref = 1;
+//	setproto(refcpt, Ref);
 	ns.ref[key] = refcpt;
 	refcpt.value = ref;
 	return refcpt;
 }
 function newcpt(ns, proto){
-	if(!proto) proto = "Cpt";
-	if(typeof proto == "string"){
+	var protocpt;
+	if(!proto){
+		proto = "Cpt";
+	}else	if(typeof proto == "string"){
 		protocpt = gc(ns, proto, {limit:2});
 	}else{
 		protocpt = proto;
@@ -655,10 +667,9 @@ function newcpt(ns, proto){
 	ns.ns[proto][name] = cpt;
 	cpt.path = ns.path + "/" + name;
 	cpt.from = ns;
-	var protocpt;
-	cpt.proto[proto] = protocpt;
+	if(proto != "Cpt")
+		cpt.proto[proto] = protocpt;
 //	if(proto == "Function" || proto == "Ns")
-	setparent(cpt, ns);
 	return cpt;
 }
 
@@ -747,39 +758,12 @@ function render(str, env){
 		wout = wout
 			.replace(/\\([\$\^])/g, "$1") //\$ \^ -> $ ^
 			.replace(/\\/g, "\\\\")
-//			.replace(/([\[\]\{\}'])/g, "\\$1")
 			.replace(/\n/g, "\\n");
-		
-
+	
 		if(win && win[0] == '='){
 			var ms;
-//automatic init
-/*
-				if((ms=win.match(/^=([A-Za-z0-9-]+)$/)))
-					if(data[ms[1]] === undefined){
-						data[ms[1]] = "";
-					}
-*/
-//eval def
-/*
-				if((ms=win.match(/^=~(.*)$/))){
-					if(ms[1].match(/:/)){
-						win = win.replace(/~(.+)/,"$.eval({$1})");
-					}else{
-						win = win.replace(/~(.+)/,"$.eval($1)");
-					}
-				}
-*/
 			evalstr += (win.replace(/^=(.+)/, "';push arrayDump $1; push arrayDump '") + wout);
 		}else{
-//eval def
-/*
-				if(win.match(/~$/)){
-					evalstr+=("');" +win.replace(/~$/, "'")+wout+"';p.push('");
-				}else{
-					evalstr+=("');"+win+";p.push('"+wout);
-				}
-*/
 			evalstr+=("';"+win+";push arrayDump '"+wout);
 		}
 	});

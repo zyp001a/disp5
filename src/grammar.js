@@ -96,7 +96,6 @@ var grammar = {
 		],
 		"L": [//word
 			["ID", "$$ = ['_id', $1]"],
-//			["ID :: ID", "$$ = ['_id', $3, $1]"],
 			["STRING", "$$ = ['_string', $1]"],
 			["NUMBER", "$$ = ['_number', Number($1)]"]
 		],
@@ -110,8 +109,8 @@ var grammar = {
 			["Lss ( Exp )", "$$ = $1; $1.push($3)"]
 		],
 		"ExpEx": [
-			["Exp", "$$ = ['_normalcall', $1]"],
-			["@ Exp", "$$ = ['_precall', $2]"]
+			["Exp", "$$ = ['_normalcall', $1]"]
+//			["@ Exp", "$$ = ['_precall', $2]"]
 		],
 		"ExpList": [
 			["ExpEx",  "$$ = [$1];"],  //artical
@@ -121,6 +120,7 @@ var grammar = {
 			[";", "$$ = [];"]
 		],
 		"Exp": [//sentence
+			["@ Exp", "$$ = ['_precall', $2]"],
 			["( Exp )", "$$ = $2"],
 			["[ Array ]", "$$ = ['_array', $2]"],
 			["[ ]", "$$ = ['_array', []]"],
@@ -151,6 +151,7 @@ var grammar = {
 		],
 		"ExpUnit": [
 			[": Brace", "$$ = ['_function', $2]"],
+//			["^ Brace", "$$ = ['_cpt', $2]"],
 			["Brace", "$$ = ['_block', $1]"]
 //			[": ID Braket", "$$ = ['_newcpt', $3, 'Function', $2]"],
 //			["^ Braket", "$$ = ['_newcpt', $2, 'Cpt']"],
