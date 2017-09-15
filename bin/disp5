@@ -28,7 +28,7 @@ switch(cmd){
 	context.code = str;
 	if(cmd == "trans"){
 		context.trans = 1;
-		if(!context.outlang) context.outlang = "nodejs";
+		if(!context.outlang) context.outlang = "nodejsLang";
 		context.outfile = arg1.replace(/\.tpl$/, "");
 	}else{
 		context.code = ":{ "+context.code+" }";

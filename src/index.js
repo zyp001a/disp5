@@ -7,13 +7,15 @@ var rootns = rawcpt("rootns");
 //var Ref = rawcpt("Ref");
 rootns.path = "rootns";
 //rootns.ref.rootns = rootns;
+newref(rootns, "self", rootns)
 rootns._isroot = 1;
 //rootns.ref.Ref = Ref;
 //rootns.from = rootns;
-setlink(rootns, gc(rootns, "jsImpl"));
-setlink(rootns, gc(rootns, "init"));
-setlink(rootns, gc(rootns, "Lang"));
-setlink(rootns, gc(rootns, "Arch"));
+setlink(rootns, gc(rootns, "jsImpl", {initref:1}));
+setlink(rootns, gc(rootns, "init", {initref:1}));
+setlink(rootns, gc(rootns, "Lang", {initref:1}));
+setlink(rootns, gc(rootns, "Arch", {initref:1}));
+
 
 
 var tplcache = {};
@@ -23,20 +25,20 @@ var userns;
 var userenv;
 module.exports = function(config, fn){
 	console.log("#Disp version: "+ version);
-	userns = gc(rootns, config.user);
-
+	var refuserns = gc(rootns, config.user, {initref:1});
+	userns = _getref(refuserns);
 	var env = newcpt(userns, "Env");
 	userenv = env;
 	if(config.trans){
-		var lang = gc(userns, config.outlang);
-		setlink(userns, config.outlang);
 		var str = render(config.code, env);
 		fs.writeFileSync(config.outfile, str);
 		return;
 	}
 	if(config.gen){
+		var arch = gc(userns, config.arch);
+		//call 1
+		doexec
 		userns.link.js = newref(rootns, "js", newcpt(rootns, "Ns"));
-		rootns.link.js = newref(rootns, "js", newcpt(rootns, "Ns"));
 	}
 	var argarr = [];
 	for(var i=1; i<process.argv.length; i++){
@@ -60,11 +62,17 @@ function _eval(code, env){
 }
 function gc(cpt, key, config){
 	if(!config) config = {};
-	if(key in cpt.ref){
-		return cpt.ref[key];
+	var vcpt = _getref(cpt);
+	if(!vcpt) {
+		console.log(cpt)
+		console.log(vcpt)
+		die("null ref")
 	}
-	if(isproto(cpt, "Array") && Number(key) >=0){
-		return cpt.value[key];
+	if(key in vcpt.ref){
+		return vcpt.ref[key];
+	}
+	if(isproto(vcpt, "Array") && Number(key) >=0){
+		return vcpt.value[key];
 	}
 	var rcpt, pns;
 	var f = __dirname + "/../"+ cpt.path + "/" + key + ".mm";
@@ -72,29 +80,29 @@ function gc(cpt, key, config){
 	if(fs.existsSync(f2)){
 		console.log(f2)
 		var str = fs.readFileSync(f2).toString();
-		var funccpt = newcpt(cpt, "Function");//Render
+		var funccpt = newcpt(vcpt, "Function");//Render
 		funccpt.block = [
-			newcall(gc(rootns, "render", {limit:2}), [raw2cpt(cpt, str)])
+			newcall(gc(rootns, "render", {limit:2}), [raw2cpt(vcpt, str)])
 		]
-		rcpt = newref(cpt, key, funccpt);
+		rcpt = newref(vcpt, key, funccpt);
 		rcpt._old = 1;
 	}else if(fs.existsSync(f)){
 		console.log(f)
 		var str = fs.readFileSync(f).toString();
 		var ast = parse(str);
 		if(ast)
-			rcpt = newref(cpt, key, analyze(cpt, ast));
+			rcpt = newref(vcpt, key, analyze(vcpt, ast));
 		else
-			rcpt = newref(cpt, key);
+			rcpt = newref(vcpt, key);
 		rcpt._old = 1;
 	}
 	if(config.assignable){
 		if(rcpt) return rcpt;
-		return newref(cpt, key);
+		return newref(vcpt, key);
 	}
 	if(!rcpt){
-		for(var p in cpt.proto){
-			rcpt = gc(cpt.proto[p], key, {
+		for(var p in vcpt.proto){
+			rcpt = gc(vcpt.proto[p], key, {
 				limit: config.limit,
 				notnew: 1
 			});
@@ -103,8 +111,8 @@ function gc(cpt, key, config){
 		}
 	}
 	if(!rcpt && config.limit > 1){
-		for(var p in cpt.link){
-			rcpt = gc(cpt.link[p], key, {
+		for(var p in vcpt.link){
+			rcpt = gc(vcpt.link[p], key, {
 				limit: config.limit-1,
 				notnew: 1
 			});
@@ -113,16 +121,16 @@ function gc(cpt, key, config){
 		}
 	}
 
-	if(!rcpt && config.limit && !cpt._isroot){
-		for(var p in cpt.parent){
-			rcpt = gc(cpt.parent[p], key, {
+	if(!rcpt && config.limit && !vcpt._isroot){
+		for(var p in vcpt.parent){
+			rcpt = gc(vcpt.parent[p], key, {
 				limit: config.limit,
 				notnew: 1
 			});
 			if(rcpt)
 				break;
 		}
-		rcpt = gc(cpt.from, key, {
+		rcpt = gc(vcpt.from, key, {
 			limit: config.limit,
 			notnew: 1
 		});
@@ -132,7 +140,10 @@ function gc(cpt, key, config){
 		return rcpt;
 
 	if(!rcpt){
-		rcpt = newref(cpt, key);
+		rcpt = newref(vcpt, key);
+		if(config.initref){
+			rcpt.value = newcpt(vcpt)
+		}
 	}
 	return rcpt;
 }
@@ -546,7 +557,7 @@ function docall(cpt, env){
 
 	var printstr = "";
 	for(var i in argvp){	
-		if(argvp[i].proto.String)
+		if(isproto(argvp[i], "String"))
 			printstr += argvp[i].path + ":" +  argvp[i].value + ",";
 		else
 			printstr += argvp[i].path + ",";
@@ -563,7 +574,7 @@ function docall(cpt, env){
 		var argcpt = newcpt(cpt, "Array");
 		argcpt.value = argvp;
 		newref(newenv, "arguments", argcpt);
-		newref(newenv, "self", func);
+		newref(newenv, "function", func);
 		
 		if(isproto(func, "Native")){
 			var resultstr = callnative(newenv, func, argvp);
@@ -625,10 +636,10 @@ function rawcpt(name){
 
 		ns: {},
 		ref: {},
-		
 		stat: {},
 		nexti: 0
 	}
+
 	return cpt;
 }
 function copycpt(ns, proto, cpt){
@@ -640,7 +651,7 @@ function copycpt(ns, proto, cpt){
 	}
 }
 function newref(ns, key, ref){
-	var refcpt = rawcpt(key);
+	var refcpt = {name: key};
 	refcpt.path = ns.path + "/" + key;
 	refcpt.from = ns;
 	refcpt._isref = 1;
@@ -654,7 +665,7 @@ function newcpt(ns, proto){
 	if(!proto){
 		proto = "Cpt";
 	}else	if(typeof proto == "string"){
-		protocpt = gc(ns, proto, {limit:2});
+		protocpt = gc(ns, proto, {limit:2, initref: 1});
 	}else{
 		protocpt = proto;
 		proto = proto.name;
@@ -667,6 +678,7 @@ function newcpt(ns, proto){
 	ns.ns[proto][name] = cpt;
 	cpt.path = ns.path + "/" + name;
 	cpt.from = ns;
+	newref(cpt, "self", cpt)
 	if(proto != "Cpt")
 		cpt.proto[proto] = protocpt;
 //	if(proto == "Function" || proto == "Ns")
