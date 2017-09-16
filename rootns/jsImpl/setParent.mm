@@ -1,1 +1,1 @@
-`setparent(self, $[0])`
+`setparent($[0], $[1])`

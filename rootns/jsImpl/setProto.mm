@@ -1,1 +1,1 @@
-`setproto(self, $0)`
+`setproto($[0], $[1])`

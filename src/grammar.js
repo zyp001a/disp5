@@ -96,6 +96,7 @@ var grammar = {
 		],
 		"L": [//word
 			["ID", "$$ = ['_id', $1]"],
+			["& STRING", "$$ = ['_id', $2]"],
 			["STRING", "$$ = ['_string', $1]"],
 			["NUMBER", "$$ = ['_number', Number($1)]"]
 		],
