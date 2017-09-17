@@ -1,0 +1,7 @@
+1. allow both tranditional function calling and current 
+ a 2 1 (1+1) -> a(2,1,1+1)
+2. interface
+ add a check function to Ns
+3. Ref in .mm
+4. indent
+5. function arguments def

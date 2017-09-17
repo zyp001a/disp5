@@ -53,11 +53,13 @@ module.exports = function(config, fn){
 		argarr.push(argcpt);
 	}
 	var ast = parse(config.code);
-	var func = analyze(userns, ast);
+	var func = analyze(userns, ast, 1);
 	mainfunc = func;
-	newref(rootns, "main", mainfunc)
-	argarr.unshift(analyze(userns, ["_id", "main"]));
-	var call = newcall(gc(userns, "call", {limit:2}), argarr);
+	newref(rootns, "main", mainfunc);
+	var argcpt = newcpt(userns, "Array");
+	argcpt.value = argarr;
+	var maincpt = analyze(userns, ["_id", "main"]);
+	var call = newcall(gc(userns, "call", {limit:2}), [maincpt, argcpt]);
 	var result = docall(call, env);
 	newref(mainfunc, "result", result)
 	if(config.gen){
@@ -261,7 +263,7 @@ function newcall(refcpt, argarr){
 	setlink(cpt, fcpt);
 	return cpt;
 }
-function analyze(ns, ast){
+function analyze(ns, ast, mainflag){
 	var c = ast[0];
 	var e = ast[1];
 	var cpt;
@@ -286,6 +288,7 @@ function analyze(ns, ast){
 				arr.push(argcpt)
 		}
 		cpt.block = arr;
+		if(mainflag) cpt._main = 1;
 		var strcpt = docall(newcall(gc(cpt, "function", {limit:2}), [cpt]), userenv).value;
 		if(strcpt){
 			cpt.value = strcpt.value
@@ -352,7 +355,7 @@ function analyze(ns, ast){
 		break;
 
 		case "_getid":
-		cpt = analyze(rootns, ['_op', 'get', ['_id', 'arguments'], e]);
+		cpt = analyze(rootns, ['_op', 'get', ['_id', 'args'], e]);
 		break;
 
 		case "_id":
@@ -360,9 +363,9 @@ function analyze(ns, ast){
 			//Arguments
 			var arg = e.substr(1);
 			if(arg != ""){ //for arguments
-				cpt = analyze(rootns, ['_op', 'get', ['_id', 'arguments'], ['_internal', arg]]);
+				cpt = analyze(ns, ['_op', 'get', ['_id', 'args'], ['_internal', arg]]);
 			}else{
-				cpt = analyze(rootns, ['_id', 'arguments']);
+				cpt = analyze(ns, ['_id', 'args']);
 			}
 		}else{
 //set function name space
@@ -615,8 +618,8 @@ function docall(cpt, env){
 
 		var argcpt = newcpt(cpt, "Array");
 		argcpt.value = argvp;
-		newref(newenv, "arguments", argcpt);
-		newref(newenv, "function", func);
+		newref(newenv, 'args', argcpt);
+		newref(newenv, "func", func);
 		
 		if(isproto(func, "Native")){
 			var resultstr = callnative(newenv, func, argvp);
