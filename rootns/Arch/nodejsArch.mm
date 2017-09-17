@@ -3,6 +3,6 @@
   setLink userns nodejsLang
  }
  setp tree :{
-    mount."main.js" = &"main.js"
+	mount."main.js" = trans &"main.js" userns
  }
 }

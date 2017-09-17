@@ -1,1 +1,1 @@
-`return render($$[0], self.from)`
+`var str = render($$[0], self.from); return str; `

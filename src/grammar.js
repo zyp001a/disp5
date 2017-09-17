@@ -96,19 +96,24 @@ var grammar = {
 		],
 		"L": [//word
 			["ID", "$$ = ['_id', $1]"],
-			["& STRING", "$$ = ['_id', $2]"],
 			["STRING", "$$ = ['_string', $1]"],
-			["NUMBER", "$$ = ['_number', Number($1)]"]
+			["NUMBER", "$$ = ['_number', Number($1)]"],
+			["& ( Exp )", "$$ = ['_getid', $3]"],
+			["& L", "$$ = ['_getid', $2]"]
 		],
-		"Ls": [
+		"Lss": [
 			["L", "$$ = [$1]"], //newcall
-			["Ls L", "$$ = $1; $1.push($2)"]
+			["Lss L", "$$ = $1; $1.push($2)"],
+			["Lss ExpUnit", "$$ = $1; $1.push($2)"],
+			["Lss ( Exp )", "$$ = $1; $1.push($3)"]
 		],
+/*
 		"Lss": [
 			["Ls", "$$ = $1"],
 			["Lss ExpUnit", "$$ = $1; $1.push($2)"],
 			["Lss ( Exp )", "$$ = $1; $1.push($3)"]
 		],
+*/
 		"ExpEx": [
 			["Exp", "$$ = ['_normalcall', $1]"]
 //			["@ Exp", "$$ = ['_precall', $2]"]

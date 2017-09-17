@@ -1,1 +1,6 @@
-`if(isproto($[0], "String")) return '"'+$$[0]+'"'; else return $$[0]`
+`
+if(isproto($[0], "String")) 
+ return '"'+$$[0]+'"'; 
+else 
+ return $$[0]
+`

@@ -1,1 +1,1 @@
-`console.log(_getref($[0]));`
+`console.log($[0]);`
