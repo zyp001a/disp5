@@ -1,4 +1,4 @@
-Tmp = new Proto {
+Tmp = proto {
  x = 80
 }
 a = new Tmp {}

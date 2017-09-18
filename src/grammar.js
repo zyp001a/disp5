@@ -156,8 +156,9 @@ var grammar = {
 //			["Exp -> Exp", "$$ = ['_op', 'link', $1, $3]"]
 		],
 		"ExpUnit": [
-			[": Brace", "$$ = ['_function', $2]"],
-//			["^ Brace", "$$ = ['_cpt', $2]"],
+			[": Brace", "$$ = ['_block', $2, 'Function']"],
+			[": IdArray Brace", "$$ = ['_block', $3, 'Function', $2]"],
+			["^ ID Brace", "$$ = ['_block', $3, $2]"],
 			["Brace", "$$ = ['_block', $1]"]
 //			[": ID Braket", "$$ = ['_newcpt', $3, 'Function', $2]"],
 //			["^ Braket", "$$ = ['_newcpt', $2, 'Cpt']"],
@@ -181,18 +182,11 @@ var grammar = {
  		"Array": [
 			["Exp", "$$ = [$1]"],
 			["Array , Exp", "$$ = $1, $1.push($3)"]
-		]/*,
-		"Prop": [
-			["L : ", "$$ = $1"],
-			["( Exp ) :", "$$ = $2"]
 		],
-		"Dic": [
-			["Exp", "$$ = [$1]"],
-			["Prop Exp", "$$ = [['prop', $1, $2]]"],
-			["Dic , Exp", "$$ = $1, $1.push($3)"],
-			["Dic , Prop Exp", "$$ = $1, $1.push(['prop', $3, $4])"]
+ 		"IdArray": [
+			["ID", "$$ = [$1]"],
+			["IdArray , ID", "$$ = $1, $1.push($3)"]
 		]
-*/
   }
 };
 var options = {};

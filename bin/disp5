@@ -34,7 +34,8 @@ switch(cmd){
 		context.code = ":{ "+context.code+" }";
 		if(cmd == "gen"){
 			context.gen = 1;
-			if(!context.arch) context.arch = "nodejsArch";
+//			if(!context.arch) context.arch = "nodejsArch";
+			if(!context.arch) context.arch = "serverArch";
 			if(!context.mount) context.mount = "gen";
 		}
 	}

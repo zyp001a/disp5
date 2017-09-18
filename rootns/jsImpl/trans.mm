@@ -1,1 +1,1 @@
-`return render($$[0], _getref($[1]))`
+`var env = _getref($[1]); return render($$[0], env)`
