@@ -1,1 +1,4 @@
+^^for a global.require{$$
+require("^^=a$$")
+^^}$$
 ^^=main$$

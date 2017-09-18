@@ -2,14 +2,18 @@ var version = "5.0.0";
 var fs = require("fs");
 var path = require("path");
 var parser = require("./parser");
-
+var assignablelist = {
+	setp:1,
+	for:1,
+	forarr:1
+}
 var rootns = rawcpt("rootns");
 //var Ref = rawcpt("Ref");
 rootns._isroot = 1;
 rootns.file = "rootns";
 rootns.path = "";
 //rootns.ref.rootns = rootns;
-newref(rootns, "self", rootns);
+//newref(rootns, "self", rootns);
 //rootns.ref.Ref = Ref;
 //rootns.from = rootns;
 setlink(rootns, gc(rootns, "jsImpl", {initref:1}));
@@ -30,6 +34,7 @@ module.exports = function(config, fn){
 	console.error("#Disp version: "+ version);
 	var refuserns = gc(rootns, config.user, {initref:1});
 	userns = _getref(refuserns);
+	gc(rootns, "global", {initref:1});
 	newref(rootns, "userns", userns);
 	var env = newcpt(userns, "Env");
 	userenv = env;
@@ -71,7 +76,6 @@ module.exports = function(config, fn){
 	if(config.gen){
 		docall(newcall(tree), rootenv);
 		for(var f in mount.value.ref){
-			if(f == "self") continue;
 			var fcpt = mount.value.ref[f];
 			if(!fs.existsSync(fcpt.file))
 				mkdirpSync(path.dirname(fcpt.file))
@@ -183,15 +187,20 @@ function gc(cpt, key, config){
 			rcpt.value = newcpt(vcpt)
 			rcpt.value.file = vcpt.file +"/" + key
 		}
+	}else{
+		if(_getref(rcpt)){
+			var init = gc(rcpt, "init", {notnew:1});
+			if(init) docall(newcall(init), rootns)
+		}
 	}
-
 	return rcpt;
 }
 
 function raw2cpt(ns, raw){
 	if(raw == undefined){
 		return gc(rootns, "Undefined", {limit:2})
-	}else if(raw == null)
+	}
+	if(raw == null)
 		return gc(rootns, "Null", {limit:2})
 	if(typeof raw == "string"){
 		var strcpt = newcpt(ns, "String");
@@ -200,6 +209,11 @@ function raw2cpt(ns, raw){
 	}
 	if(typeof raw == "number"){
 		var strcpt = newcpt(ns, "Number");
+		strcpt.value = raw;
+		return strcpt;
+	}
+	if(typeof raw == "boolean"){
+		var strcpt = newcpt(ns, "Boolean");
 		strcpt.value = raw;
 		return strcpt;
 	}
@@ -327,7 +341,7 @@ function analyze(ns, ast, mainflag){
 		case "_newcall"://action
 		var fcpt = analyze(ns, e[0]);
 		if(e.length > 1){
-			if(fcpt.name == "setp"){
+			if(assignablelist[fcpt.name]){
 				e[1].assignable = 1;
 			}
 			var argarr = [];
@@ -567,6 +581,10 @@ function doexec(funcref, env){
 		var tmpcpt = docall(scpt, env);
 		func.cpt.push(tmpcpt.value);
 		result = tmpcpt;
+		
+		if(tmpcpt.value.name == "break" || tmpcpt.value.name == "continue"){
+			return result;
+		}
 	}
 	return result;
 }
@@ -708,7 +726,7 @@ function newcpt(ns, proto){
 	cpt.path = ns.path  + "/" + name;
 	cpt.file = ns.file;
 	cpt.from = ns;
-	newref(cpt, "self", cpt)
+//	newref(cpt, "self", cpt)
 	if(proto != "Cpt")
 		cpt.proto[proto] = protocpt;
 //	if(proto == "Function" || proto == "Ns")
