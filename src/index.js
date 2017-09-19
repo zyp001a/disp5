@@ -21,6 +21,7 @@ setlink(rootns, gc(rootns, "basic", {initref:1}));
 setlink(rootns, gc(rootns, "Lang", {initref:1}));
 setlink(rootns, gc(rootns, "Arch", {initref:1}));
 setlink(rootns, gc(rootns, "String", {initref:1}));
+setlink(rootns, gc(rootns, "string", {initref:1}));
 setlink(rootns, gc(rootns, "web", {initref:1}));
 
 var tplcache = {};
@@ -29,9 +30,12 @@ var topersist= {};
 var userns;
 var userenv;
 var mainfunc;
+var pseudoresult;
+var pseudomain;
 var	rootenv = newcpt(rootns, "Env");
 module.exports = function(config, fn){
 	console.error("#Disp version: "+ version);
+	var ast = parse(config.code);
 	var refuserns = gc(rootns, config.user, {initref:1});
 	userns = _getref(refuserns);
 	gc(rootns, "global", {initref:1});
@@ -48,13 +52,23 @@ module.exports = function(config, fn){
 	var tree, mount;
 	
 	if(config.gen){
+
 		mount = gc(rootns, "mount", {initref:1});
 		mount.value.file = config.mount;
 		var arch = _getref(gc(userns, config.arch, {limit:2}));
-		//call 1		
-		var init = gc(arch, "init");
+		//call 1
+		var pre = gc(arch, "pre");
 		tree = gc(arch, "tree");
-		docall(newcall(init), rootenv);
+//pseudocall////////////////////////////////
+		var func = analyze(userns, ast, 1);
+		mainfunc = func;
+		pseudomain = func;
+		var mainref = newref(rootns, "main", mainfunc);
+		var call = newcall(mainfunc, argarr);
+		pseudoresult = pseudocall(call, env);
+////////////////////////
+		
+		docall(newcall(pre), rootenv);
 	}
 	var argarr = [];
 	for(var i=1; i<process.argv.length; i++){
@@ -62,7 +76,7 @@ module.exports = function(config, fn){
 		argarr.push(argcpt);
 	}
 //call
-	var ast = parse(config.code);
+
 	var func = analyze(userns, ast, 1);
 	mainfunc = func;
 	newref(rootns, "main", mainfunc);
@@ -71,9 +85,12 @@ module.exports = function(config, fn){
 	var maincpt = analyze(userns, ["_id", "main"]);
 	var call = newcall(gc(userns, "call", {limit:2}), [maincpt, argcpt]);
 	var result = docall(call, env);
+
 	newref(mainfunc, "result", result)
 // gen
 	if(config.gen){
+//		console.log(pseudoresult)
+//		console.log(pseudomain)
 		docall(newcall(tree), rootenv);
 		for(var f in mount.value.ref){
 			var fcpt = mount.value.ref[f];
@@ -84,6 +101,12 @@ module.exports = function(config, fn){
 		}
 	}
 	archive();
+}
+function pseudocall(tcall, env){
+	var newenv = newcpt(env);
+  newref(newenv, "pseudo");
+	docall(tcall, newenv);
+	return newenv.ns.Env.$Env0;
 }
 function _eval(code, env){
 	code = "{" + code + "}";
@@ -108,7 +131,7 @@ function gc(cpt, key, config){
 	if(key in vcpt.ref){
 		return vcpt.ref[key];
 	}
-	if(isproto(vcpt, "Array") && Number(key) >=0){
+	if((isproto(vcpt, "Array") || isproto(vcpt, "String")) && Number(key) >=0){
 		return vcpt.value[key];
 	}
 	var rcpt, pns;
@@ -118,11 +141,24 @@ function gc(cpt, key, config){
 	if(fs.existsSync(f)){
 		var str = fs.readFileSync(f).toString();
 		var ast = parse(str);
+		var func;
 		if(ast)
-			rcpt = newref(vcpt, key, analyze(vcpt.from, ast));
+			func = analyze(vcpt.from, ast);
 		else
-			rcpt = newref(vcpt, key);
+			func = newcpt(vcpt, "Function");
+		rcpt = newref(vcpt, key, func);
 		rcpt._old = 1;
+		var ff = __dirname + "/../"+ cpt.file + "/" + key + ".pmm";
+		if(fs.existsSync(ff)){
+			var str2 = fs.readFileSync(ff).toString();
+			var ast2 = parse(str2);
+			var func2;
+			if(ast2)
+				func2 = analyze(vcpt.from, ast2);
+			else
+				func2 = newcpt(vcpt, "Function");
+			func._pseudo = func2;
+		}
 	}else if(fs.existsSync(f2)){
 		var str = fs.readFileSync(f2).toString();
 		var funccpt = newcpt(vcpt, "Function");//Render
@@ -217,6 +253,7 @@ function raw2cpt(ns, raw){
 		strcpt.value = raw;
 		return strcpt;
 	}
+	return raw;
 }
 
 function isproto(cpt, tarkey){
@@ -445,11 +482,15 @@ function analyze(ns, ast, mainflag){
 			left._proto.value = newcpt(ns);
 		}
 */
-		var right;
-		if(ast[3]) right = analyze(ns, ast[3]);
+		var argarr;
+		if(ast[3]){
+			argarr = [left, analyze(ns, ast[3])];
+		}else{
+			argarr = [left]
+		}
 		cpt = newcall(gc(ns, e, {
 			limit:2
-		}), [left, right]);
+		}), argarr);
 		break;
 
 		default:
@@ -594,7 +635,14 @@ function docall(cpt, env){
 		console.error(cpt)
 		die("wrong call")
 	}
+	var pseudo = gc(env, "pseudo", {limit:1, notnew:1})
+
 	var func = tcall[0];
+		
+	if(pseudo && func._pseudo){
+		func = func._pseudo;
+	}
+
 	var argv = tcall[1];
 	var argvp = [];
 	for(var i in argv){
@@ -637,7 +685,7 @@ function docall(cpt, env){
 				cpt.cpt.push(tmpcpt.value);
 				if(tmpcpt.call[2].name == "return"){
 					result = tmpcpt.value;
-					break;
+  					break;
 				}else{
 					result = tmpcpt;
 				}

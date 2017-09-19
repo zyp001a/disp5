@@ -44,6 +44,11 @@ var grammar = {
 			["{sp}\\>\\={sp2}", "return '>='"],
 			["{sp}\\<\\={sp2}", "return '<='"],
 			["{sp}\\=\\={sp2}", "return '=='"],
+			["{sp}\\!\\={sp2}", "return '!='"],
+			["{sp}\\+\\={sp2}", "return '+='"],
+			["{sp}\\-\\={sp2}", "return '-='"],
+			["{sp}\\*\\={sp2}", "return '*='"],
+			["{sp}\\/\\={sp2}", "return '/='"],
 			["{sp}\\|\\|{sp2}", "return '||'"],
 			["{sp}\\&\\&{sp2}", "return '&&'"],
 			["{sp}\\:\\:{sp2}", "return '::'"],
@@ -73,7 +78,7 @@ var grammar = {
 	"operators": [
     ["right", "=", "+=", "-=", "*=", "/="],
 		["left", "=?", "=:", "=>", "->"],
-		["left", "<", ">", ">=", "<=", "=="],
+		["left", "<", ">", ">=", "<=", "==", "!="],
 		["left", "=~"],
 		["left", ","],
     ["left", "||"],
@@ -130,7 +135,6 @@ var grammar = {
 		"Exp": [//sentence
 			["@ Exp", "$$ = ['_precall', $2]"],
 			["( Exp )", "$$ = $2"],
-			["[ Array ]", "$$ = ['_array', $2]"],
 			["[ ]", "$$ = ['_array', []]"],
 			["Lss", "if($1.length == 1) $$ = $1[0]; else $$ = ['_newcall', $1]"],
 			["ExpUnit", "$$ = $1"],
@@ -138,9 +142,9 @@ var grammar = {
 			["Native", "$$ = $1"]
 		],
 		"GetOp": [
-			["Exp . ID", "$$ = ['_op', 'get', $1, ['_internal', $3]]"],
-			["Exp . STRING", "$$ = ['_op', 'get', $1, ['_internal', $3]]"],
-			["Exp . NUMBER", "$$ = ['_op', 'get', $1, ['_internal', $3]]"],
+			["Exp . ID", "$$ = ['_op', 'get', $1, ['_string', $3]]"],
+			["Exp . STRING", "$$ = ['_op', 'get', $1, ['_string', $3]]"],
+			["Exp . NUMBER", "$$ = ['_op', 'get', $1, ['_number', $3]]"],
 			["Exp . ( Exp )", "$$ = ['_op', 'get', $1, $4]"]
 		],
 		"Op": [
@@ -149,19 +153,19 @@ var grammar = {
 //			["Exp : Exp", "$$ = ['_op', 'preassign', $1, $3]"],
 			["Exp + Exp", "$$ = ['_op', 'plus', $1, $3]"],
 			["Exp - Exp", "$$ = ['_op', 'minus', $1, $3]"],
+			["Exp * Exp", "$$ = ['_op', 'times', $1, $3]"],
+			["Exp / Exp", "$$ = ['_op', 'obelus', $1, $3]"],
+			["Exp += Exp", "$$ = ['_op', 'assign', $1, ['_op', 'plus', $1, $3]]"],
 			["Exp < Exp", "$$ = ['_op', 'lt', $1, $3]"],
 			["Exp > Exp", "$$ = ['_op', 'gt', $1, $3]"],
 			["Exp <= Exp", "$$ = ['_op', 'le', $1, $3]"],
 			["Exp >= Exp", "$$ = ['_op', 'ge', $1, $3]"],
 			["Exp == Exp", "$$ = ['_op', 'eq', $1, $3]"],
+			["Exp != Exp", "$$ = ['_op', 'ne', $1, $3]"],
 			["GetOp", "$$ = $1"]
-//			["Exp =~ Exp", "$$ = ['_op', 'match', $1, $3]"]
-//			["Exp =? Exp", "$$ = ['_op', 'default', $1, $3]"],
-//			["Exp =: Exp", "$$ = ['_op', 'proto', $1, $3]"],
-//			["Exp => Exp", "$$ = ['_op', 'parent', $1, $3]"],
-//			["Exp -> Exp", "$$ = ['_op', 'link', $1, $3]"]
 		],
 		"ExpUnit": [
+			["[ Array ]", "$$ = ['_array', $2]"],
 			[": Brace", "$$ = ['_block', $2, 'Function']"],
 			[": IdArray Brace", "$$ = ['_block', $3, 'Function', $2]"],
 			["^ ID Brace", "$$ = ['_block', $3, $2]"],

@@ -10,3 +10,7 @@ b = {
 for x b {
  print x
 }
+c = "xyz"
+forarr x c {
+ print x
+}

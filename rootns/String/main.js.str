@@ -1,4 +1,4 @@
-^^for a global.require{$$
-require("^^=a$$")
+^^for a (global.require) {$$
+var ^^=(hyphen2uc a)$$ = require("^^=a$$");
 ^^}$$
 ^^=main$$

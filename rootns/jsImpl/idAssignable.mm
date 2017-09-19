@@ -1,1 +1,1 @@
-`return gc(self.from, $$[0], {limit:2, assignable:1})`
+`return gc(ns, $$[0], {limit:2, assignable:1})`

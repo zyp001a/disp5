@@ -1,5 +1,5 @@
 {
- setp init :{
+ setp pre :{
   setLink userns nodejsLang
  }
  setp tree :{
