@@ -154,3 +154,13 @@ a = new Server {
 dual env
 dual analyze
 -> dual call
+
+# 9.22
+keywords:
+arguments $
+local/var @
+getrepr &
+id ^
+precall :
+class :
+function :

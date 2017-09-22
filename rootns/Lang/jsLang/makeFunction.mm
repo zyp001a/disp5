@@ -1,6 +1,6 @@
 `
 var fcpt = $[0];
-var res = docall(newcall(fcpt), userenv);
+var res = docall(newcall(fcpt), global);
 var str = ""
 for(var varname in fcpt.ref){
  if(varname != "self")

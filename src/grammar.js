@@ -52,6 +52,7 @@ var grammar = {
 			["{sp}\\|\\|{sp2}", "return '||'"],
 			["{sp}\\&\\&{sp2}", "return '&&'"],
 			["{sp}\\:\\:{sp2}", "return '::'"],
+			["{sp}\\:\\={sp2}", "return ':='"],
 //      ["{sp}\\${sp}", "return '$'"],
 //      ["{sp}\\>\\>{sp2}", "return '>>'"],
       ["{sp}\\>{sp2}", "return '>'"],
@@ -76,8 +77,8 @@ var grammar = {
     ]
   },
 	"operators": [
-    ["right", "=", "+=", "-=", "*=", "/="],
-		["left", "=?", "=:", "=>", "->"],
+    ["right", "=", "+=", "-=", "*=", "/=", ":="],
+//		["left", "=?", "=:", "=>", "->"],
 		["left", "<", ">", ">=", "<=", "==", "!="],
 		["left", "=~"],
 		["left", ","],
@@ -101,18 +102,35 @@ var grammar = {
 		"Native": [
 			["NATIVE", "$$ = ['_native', $1]"]
 		],
-		"L": [//word
+		"Id": [
 			["ID", "$$ = ['_id', $1]"],
+			["@ ID", "$$ = ['_local', $2]"],
+			["^ ( Exp )", "$$ = ['_getid', $3]"],
+			["^ STRING", "$$ = ['_getid', ['_string', $2]]"]
+		],
+		"L": [//word
+			["Id", "$$ = $1"],
 			["STRING", "$$ = ['_string', $1]"],
 			["NUMBER", "$$ = ['_number', Number($1)]"],
-			["& ( Exp )", "$$ = ['_getid', $3]"],
-			["& L", "$$ = ['_getid', $2]"]
+			["& Id", "$$ = ['_getrepr', $2]"]
 		],
 		"Lss": [
 			["L", "$$ = [$1]"], //newcall
+			["Lss GetOp", "$$ = $1; $1.push($2);"],
 			["Lss L", "$$ = $1; $1.push($2)"],
 			["Lss ExpUnit", "$$ = $1; $1.push($2)"],
 			["Lss ( Exp )", "$$ = $1; $1.push($3)"]
+		],
+		"Key": [
+			["ID", "$$ = ['_string', $1]"],
+			["STRING", "$$ = ['_string', $1]"],
+			["NUMBER", "$$ = ['_number', $1]"],
+			["( Exp )", "$$ = $2"]
+		],
+		"GetOp": [
+			["Id . Key", "$$ = ['_newcall', [['_id', 'get'], $1, $3]]"],
+			["( Exp ) . Key", "$$ = ['_newcall', [['_id', 'get'], $2, $4]]"],
+			["GetOp . Key", "$$ = ['_newcall', [['_id', 'get'], $1, $3]]"]
 		],
 /*
 		"Lss": [
@@ -133,54 +151,38 @@ var grammar = {
 			[";", "$$ = [];"]
 		],
 		"Exp": [//sentence
-			["@ Exp", "$$ = ['_precall', $2]"],
 			["( Exp )", "$$ = $2"],
 			["[ ]", "$$ = ['_array', []]"],
 			["Lss", "if($1.length == 1) $$ = $1[0]; else $$ = ['_newcall', $1]"],
 			["ExpUnit", "$$ = $1"],
-			["Op", "$$ = $1"],
-			["Native", "$$ = $1"]
-		],
-		"GetOp": [
-			["Exp . ID", "$$ = ['_op', 'get', $1, ['_string', $3]]"],
-			["Exp . STRING", "$$ = ['_op', 'get', $1, ['_string', $3]]"],
-			["Exp . NUMBER", "$$ = ['_op', 'get', $1, ['_number', $3]]"],
-			["Exp . ( Exp )", "$$ = ['_op', 'get', $1, $4]"]
+			["Op", "$$ = $1"]
 		],
 		"Op": [
-			["! Exp", "$$ = ['_op', 'not', $2]"],
-			["Exp = Exp", "$$ = ['_op', 'assign', $1, $3]"],
-//			["Exp : Exp", "$$ = ['_op', 'preassign', $1, $3]"],
-			["Exp + Exp", "$$ = ['_op', 'plus', $1, $3]"],
-			["Exp - Exp", "$$ = ['_op', 'minus', $1, $3]"],
-			["Exp * Exp", "$$ = ['_op', 'times', $1, $3]"],
-			["Exp / Exp", "$$ = ['_op', 'obelus', $1, $3]"],
-			["Exp += Exp", "$$ = ['_op', 'assign', $1, ['_op', 'plus', $1, $3]]"],
-			["Exp < Exp", "$$ = ['_op', 'lt', $1, $3]"],
-			["Exp > Exp", "$$ = ['_op', 'gt', $1, $3]"],
-			["Exp <= Exp", "$$ = ['_op', 'le', $1, $3]"],
-			["Exp >= Exp", "$$ = ['_op', 'ge', $1, $3]"],
-			["Exp == Exp", "$$ = ['_op', 'eq', $1, $3]"],
-			["Exp != Exp", "$$ = ['_op', 'ne', $1, $3]"],
+			["! Exp", "$$ = ['_newcall', [['_id', 'not'], $2]]"],
+			["Exp = Exp", "$$ = ['_newcall', [['_id', 'assign'], $3, $1]]"],
+			["Exp + Exp", "$$ = ['_newcall', [['_id', 'add'], $1, $3]]"],
+			["Exp - Exp", "$$ = ['_newcall', [['_id', 'minus'], $1, $3]]"],
+			["Exp * Exp", "$$ = ['_newcall', [['_id', 'times'], $1, $3]]"],
+			["Exp / Exp", "$$ = ['_newcall', [['_id', 'obelus'], $1, $3]]"],
+			["Exp += Exp", "$$ = ['_newcall', [['_id', 'assign'], ['_newcall', [['_id', 'add'], $1, $3]], $1]]"],
+			["Exp >= Exp", "$$ = ['_newcall', [['_id', 'ge'], $1, $3]]"],
+			["Exp <= Exp", "$$ = ['_newcall', [['_id', 'le'], $1, $3]]"],
+			["Exp == Exp", "$$ = ['_newcall', [['_id', 'eq'], $1, $3]]"],
+			["Exp != Exp", "$$ = ['_newcall', [['_id', 'ne'], $1, $3]]"],
+			["Exp > Exp", "$$ = ['_newcall', [['_id', 'gt'], $1, $3]]"],
+			["Exp < Exp", "$$ = ['_newcall', [['_id', 'lt'], $1, $3]]"],
+			["ID := Exp", "$$ = ['_newcall', [['_id', 'setp'], $3, ['_local', '$1']]]"],
 			["GetOp", "$$ = $1"]
 		],
 		"ExpUnit": [
 			["[ Array ]", "$$ = ['_array', $2]"],
 			[": Brace", "$$ = ['_block', $2, 'Function']"],
-			[": IdArray Brace", "$$ = ['_block', $3, 'Function', $2]"],
-			["^ ID Brace", "$$ = ['_block', $3, $2]"],
-			["Brace", "$$ = ['_block', $1]"]
-//			[": ID Braket", "$$ = ['_newcpt', $3, 'Function', $2]"],
-//			["^ Braket", "$$ = ['_newcpt', $2, 'Cpt']"],
-//			["^ : ID Braket", "$$ = ['_newcpt', $4, 'Cpt', $3]"],
-//			["^ ID : ID Braket", "$$ = ['_newcpt', $5, $2, $4]"]
+			[": ( IdstrArray ) Brace", "$$ = ['_block', $5, 'Function', $3]"],
+			[": ID Brace", "$$ = ['_block', $3, $2]"],
+			["Brace", "$$ = ['_block', $1]"],
+			[": Native", "$$ = ['_precall', $2]"],
+			["Native", "$$ = $1"]
 		],
-/*
-		"Braket": [
-			["[ ExpList ]", "$$ = $2"],
-			["[ ]", "$$ = []"]
-		],
-*/
 		"Brace": [
 			["{ ExpList }", "$$ = $2"],
 			["{ }", "$$ = []"]
@@ -193,9 +195,9 @@ var grammar = {
 			["Exp", "$$ = [$1]"],
 			["Array , Exp", "$$ = $1, $1.push($3)"]
 		],
- 		"IdArray": [
+ 		"IdstrArray": [
 			["ID", "$$ = [$1]"],
-			["IdArray , ID", "$$ = $1, $1.push($3)"]
+			["IdstrArray , ID", "$$ = $1, $1.push($3)"]
 		]
   }
 };

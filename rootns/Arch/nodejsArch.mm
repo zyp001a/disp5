@@ -1,8 +1,8 @@
 {
- setp pre :{
-  setLink userns nodejsLang
+ pre := :{
+  setLink global nodejsLang
  }
- setp tree :{
-	mount."main.js" = trans &"main.js" userns
+ tree := :{
+	mount."main.js" = trans ^"main.js" userns
  }
 }
