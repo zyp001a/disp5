@@ -31,15 +31,13 @@ switch(cmd){
 		if(!context.outlang) context.outlang = "nodejsLang";
 		context.outfile = arg1.replace(/\.tpl$/, "");
 	}else{
+		if(cmd == "gen") context.gen = 1;
 		context.code = ":{ "+context.code+" }";
-		if(cmd == "gen"){
-			context.gen = 1;
 //			if(!context.arch) context.arch = "nodejsArch";
-			if(!context.arch) context.arch = "serverArch";
-			if(!context.mount) context.mount = arg1.replace("\.mm", "")+".gen";
-		}
+		if(!context.arch) context.arch = "serverArch";
+		if(!context.mount) context.mount = arg1.replace("\.mm", "")+".gen";
 	}
-	d(context);	
+	d(context);
 	break;
 
 	case "exec":

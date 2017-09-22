@@ -7,14 +7,14 @@ var assignablelist = {
 	for:1,
 	forarr:1
 }
-var gcpath = ["custom", "rootns"]
+var gcpath = ["custom", "rootns"];
 var rootns = rawcpt("rootns");
 //var Ref = rawcpt("Ref");
 rootns._isroot = 1;
 rootns.file = "";
 rootns.path = "";
+newref(rootns, "global", rootns);
 //rootns.ref.rootns = rootns;
-//newref(rootns, "self", rootns);
 //rootns.ref.Ref = Ref;
 //rootns.from = rootns;
 setlink(rootns, gc(rootns, "jsImpl", {initref:1}));
@@ -24,73 +24,48 @@ setlink(rootns, gc(rootns, "Arch", {initref:1}));
 setlink(rootns, gc(rootns, "String", {initref:1}));
 setlink(rootns, gc(rootns, "string", {initref:1}));
 setlink(rootns, gc(rootns, "web", {initref:1}));
-gc(rootns, "global", {initref:1});
 
-var tplcache = {};
-var codecache = {};
-var topersist= {};
-var userns;
-var userenv;
-var mainfunc;
-var	rootenv = newcpt(rootns, "Env");
+//var tplcache = {};
+//var codecache = {};
+//var topersist= {};
+var globalenv;
 module.exports = function(config, fn){
 	console.error("#Disp version: "+ version);
 	var ast = parse(config.code);
-	var refuserns = gc(rootns, config.user, {initref:1});
-	userns = _getref(refuserns);
-	newref(rootns, "userns", userns);
-	var env = newcpt(userns, "Env");
-	userenv = env;
 	if(config.trans){
-		mainfunc = rootns;
-		var str = render(config.code, env);
+		var str = render(config.code, globalenv);
 		console.error("write: "+config.outfile)
 		fs.writeFileSync(config.outfile, str);
 		return;
 	}
-	var tree, mount;
-	
+	var tree, mount, arch;
 	if(config.gen){
 		mount = gc(rootns, "mount", {initref:1});
 		mount.value.file = config.mount;
-		var arch = _getref(gc(userns, config.arch, {limit:2}));
-		//call 1
+		arch = _getref(gc(rootns, config.arch, {limit:2}));
 		var pre = gc(arch, "pre");
 		tree = gc(arch, "tree");
-//pseudocall////////////////////////////////
-		/*
-		var func = analyze(userns, ast, 1);
-		mainfunc = func;
-		pseudomain = func;
-		var mainref = newref(rootns, "main", mainfunc);
-		var call = newcall(mainfunc, argarr);
-		pseudoresult = pseudocall(call, env);
-*/
-////////////////////////
-		
-		docall(newcall(pre), rootenv);
+		docall(newcall(pre), rootns);
 	}
+//make argcpt
+	var argcpt = newcpt(rootns, "Array");
 	var argarr = [];
 	for(var i=1; i<process.argv.length; i++){
-		var argcpt = newcall(gc(userns, "raw", {limit:2}), [raw2cpt(userns, process.argv[i])]);
+		var argcpt = newcall(gc(rootns, "raw", {limit:2}), [raw2cpt(process.argv[i])]);
 		argarr.push(argcpt);
 	}
-//call
-
-	var func = analyze(userns, ast, 1);
-	mainfunc = func;
-	newref(rootns, "main", mainfunc);
-	var argcpt = newcpt(userns, "Array");
 	argcpt.value = argarr;
-	var maincpt = analyze(userns, ["_id", "main"]);
-	var call = newcall(gc(userns, "call", {limit:2}), [maincpt, argcpt]);
-	var result = docall(call, env);
 
-	newref(mainfunc, "result", result)
+//make main
+	var mainfunc = analyze(rootns, ast, 1);
+	var maincpt = newref(rootns, "main", mainfunc);
+//call
+	var call = newcall(gc(rootns, "call", {limit:2}), [maincpt, argcpt]);
+	var result = docall(call, rootns);
 // gen
 	if(config.gen){
 //		console.log(pseudomain)
-		docall(newcall(tree), rootenv);
+		docall(newcall(tree), rootns);
 		for(var f in mount.value.ref){
 			var fcpt = mount.value.ref[f];
 			if(!fs.existsSync(fcpt.file))
@@ -160,14 +135,14 @@ function gc(cpt, key, config){
 			var str = fs.readFileSync(f+".tpl").toString();
 			var funccpt = newcpt(vcpt, "Function");//Render
 			funccpt.block = [
-				newcall(gc(rootns, "render", {limit:2}), [raw2cpt(vcpt, str), analyze(rootns, ['_id', "$0"])])
+				newcall(gc(rootns, "render", {limit:2}), [raw2cpt(str), analyze(rootns, ['_id', "$0"])])
 //			newcall(gc(rootns, "render", {limit:2}), [raw2cpt(vcpt, str)])
 			]
 			rcpt = newref(vcpt, key, funccpt);
 			rcpt._old = 1;
 		}else if(fs.existsSync(f+".str")){
 			var str = fs.readFileSync(f+".str").toString();
-			rcpt = raw2cpt(vcpt, str);
+			rcpt = raw2cpt(str);
 		}
 	}
 	if(config.assignable){
@@ -178,6 +153,7 @@ function gc(cpt, key, config){
 		for(var p in vcpt.link){
 			rcpt = gc(vcpt.link[p], key, {
 				limit: config.limit-1,
+				history: config.history,
 				notnew: 1
 			});
 			if(rcpt){
@@ -189,6 +165,7 @@ function gc(cpt, key, config){
 		for(var p in vcpt.parent){
 			rcpt = gc(vcpt.parent[p], key, {
 				limit: config.limit,
+				history: config.history,
 				notnew: 1
 			});
 			if(rcpt)
@@ -197,6 +174,7 @@ function gc(cpt, key, config){
 		if(!rcpt && !cpt._isroot){
 			rcpt = gc(cpt.from, key, {
 				limit: config.limit,
+				history: config.history,
 				notnew: 1
 			});
 		}
@@ -205,6 +183,7 @@ function gc(cpt, key, config){
 		for(var p in vcpt.proto){
 			rcpt = gc(vcpt.proto[p], key, {
 				limit: config.limit,
+				history: config.history,
 				notnew: 1
 			});
 			if(rcpt)
@@ -229,24 +208,24 @@ function gc(cpt, key, config){
 	return rcpt;
 }
 
-function raw2cpt(ns, raw){
+function raw2cpt(raw){
 	if(raw == undefined){
 		return gc(rootns, "Undefined", {limit:2})
 	}
 	if(raw == null)
 		return gc(rootns, "Null", {limit:2})
 	if(typeof raw == "string"){
-		var strcpt = newcpt(ns, "String");
+		var strcpt = newcpt(rootns, "String");
 		strcpt.value = raw;
 		return strcpt;
 	}
 	if(typeof raw == "number"){
-		var strcpt = newcpt(ns, "Number");
+		var strcpt = newcpt(rootns, "Number");
 		strcpt.value = raw;
 		return strcpt;
 	}
 	if(typeof raw == "boolean"){
-		var strcpt = newcpt(ns, "Boolean");
+		var strcpt = newcpt(rootns, "Boolean");
 		strcpt.value = raw;
 		return strcpt;
 	}
@@ -428,14 +407,14 @@ function analyze(ns, ast, mainflag){
 			if(ast.assignable){
 				cpt = gc(ns, e, {limit:2, assignable:1});
 				if(!cpt._old){
-					var ncpt = newcall(gc(ns, "idAssignable", {limit:2}), [raw2cpt(ns, e)]);
+					var ncpt = newcall(gc(ns, "idAssignable", {limit:2}), [raw2cpt(e)]);
 					ncpt._proto = cpt;
 					cpt = ncpt;
 				}
 			}else{
 				cpt = gc(ns, e, {limit:2});
 				if(!cpt._old){
-					var ncpt = newcall(gc(ns, "id", {limit:2}), [raw2cpt(ns, e)]);
+					var ncpt = newcall(gc(ns, "id", {limit:2}), [raw2cpt(e)]);
 					ncpt._proto = cpt;
 					cpt = ncpt;
 				}
@@ -446,7 +425,7 @@ function analyze(ns, ast, mainflag){
 
 		case "_string":
 		case "_number":
-		cpt = newcall(gc(ns, "raw", {limit:2}), [raw2cpt(ns, e)]);
+		cpt = newcall(gc(ns, "raw", {limit:2}), [raw2cpt(e)]);
 		break;
 
 		case "_internal":
@@ -659,7 +638,7 @@ function docall(cpt, env){
 		if(isproto(func, "Native")){
 			var resultstr = callnative(newenv, func, argvp);
 			if(typeof resultstr != "object")
-				result = raw2cpt(cpt, resultstr);
+				result = raw2cpt(resultstr);
 			else
 				result = resultstr;
 			cpt.cpt.push(result.value);
