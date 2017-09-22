@@ -7,10 +7,11 @@ var assignablelist = {
 	for:1,
 	forarr:1
 }
+var gcpath = ["custom", "rootns"]
 var rootns = rawcpt("rootns");
 //var Ref = rawcpt("Ref");
 rootns._isroot = 1;
-rootns.file = "rootns";
+rootns.file = "";
 rootns.path = "";
 //rootns.ref.rootns = rootns;
 //newref(rootns, "self", rootns);
@@ -23,6 +24,7 @@ setlink(rootns, gc(rootns, "Arch", {initref:1}));
 setlink(rootns, gc(rootns, "String", {initref:1}));
 setlink(rootns, gc(rootns, "string", {initref:1}));
 setlink(rootns, gc(rootns, "web", {initref:1}));
+gc(rootns, "global", {initref:1});
 
 var tplcache = {};
 var codecache = {};
@@ -30,15 +32,12 @@ var topersist= {};
 var userns;
 var userenv;
 var mainfunc;
-var pseudoresult;
-var pseudomain;
 var	rootenv = newcpt(rootns, "Env");
 module.exports = function(config, fn){
 	console.error("#Disp version: "+ version);
 	var ast = parse(config.code);
 	var refuserns = gc(rootns, config.user, {initref:1});
 	userns = _getref(refuserns);
-	gc(rootns, "global", {initref:1});
 	newref(rootns, "userns", userns);
 	var env = newcpt(userns, "Env");
 	userenv = env;
@@ -52,7 +51,6 @@ module.exports = function(config, fn){
 	var tree, mount;
 	
 	if(config.gen){
-
 		mount = gc(rootns, "mount", {initref:1});
 		mount.value.file = config.mount;
 		var arch = _getref(gc(userns, config.arch, {limit:2}));
@@ -60,12 +58,14 @@ module.exports = function(config, fn){
 		var pre = gc(arch, "pre");
 		tree = gc(arch, "tree");
 //pseudocall////////////////////////////////
+		/*
 		var func = analyze(userns, ast, 1);
 		mainfunc = func;
 		pseudomain = func;
 		var mainref = newref(rootns, "main", mainfunc);
 		var call = newcall(mainfunc, argarr);
 		pseudoresult = pseudocall(call, env);
+*/
 ////////////////////////
 		
 		docall(newcall(pre), rootenv);
@@ -89,7 +89,6 @@ module.exports = function(config, fn){
 	newref(mainfunc, "result", result)
 // gen
 	if(config.gen){
-//		console.log(pseudoresult)
 //		console.log(pseudomain)
 		docall(newcall(tree), rootenv);
 		for(var f in mount.value.ref){
@@ -100,7 +99,6 @@ module.exports = function(config, fn){
 			fs.writeFileSync(fcpt.file, fcpt.value.value)
 		}
 	}
-	archive();
 }
 function pseudocall(tcall, env){
 	var newenv = newcpt(env);
@@ -121,7 +119,7 @@ function _eval(code, env){
 }
 function gc(cpt, key, config){
 	if(!cpt) die("gc " +key+": cpt undefined")
-	if(!config) config = {};
+	if(!config) config = {history:{}};
 	var vcpt = _getref(cpt);
 	if(!vcpt) {
 		console.error(cpt)
@@ -135,44 +133,43 @@ function gc(cpt, key, config){
 		return vcpt.value[key];
 	}
 	var rcpt, pns;
-	var f = __dirname + "/../"+ cpt.file + "/" + key + ".mm";
-	var f2 = __dirname + "/../"+ cpt.file + "/" + key + ".tpl";
-	var f3 = __dirname + "/../"+ cpt.file + "/" + key + ".str";
-	if(fs.existsSync(f)){
-		var str = fs.readFileSync(f).toString();
-		var ast = parse(str);
-		var func;
-		if(ast)
-			func = analyze(vcpt.from, ast);
-		else
-			func = newcpt(vcpt, "Function");
-		rcpt = newref(vcpt, key, func);
-		rcpt._old = 1;
-		var ff = __dirname + "/../"+ cpt.file + "/" + key + ".pmm";
-		if(fs.existsSync(ff)){
-			var str2 = fs.readFileSync(ff).toString();
-			var ast2 = parse(str2);
-			var func2;
-			if(ast2)
-				func2 = analyze(vcpt.from, ast2);
+	for(var gcpathi in gcpath){
+		var gcpathe = gcpath[gcpathi];
+		var f = __dirname + "/../"+ gcpathe + cpt.file + "/" + key;
+		if(fs.existsSync(f+".mm")){
+			var str = fs.readFileSync(f+".mm").toString();
+			var ast = parse(str);
+			var func;
+			if(ast)
+				func = analyze(vcpt.from, ast);
 			else
-				func2 = newcpt(vcpt, "Function");
-			func._pseudo = func2;
-		}
-	}else if(fs.existsSync(f2)){
-		var str = fs.readFileSync(f2).toString();
-		var funccpt = newcpt(vcpt, "Function");//Render
-		funccpt.block = [
-			newcall(gc(rootns, "render", {limit:2}), [raw2cpt(vcpt, str), analyze(rootns, ['_id', "$0"])])
+				func = newcpt(vcpt, "Function");
+			rcpt = newref(vcpt, key, func);
+			rcpt._old = 1;
+			if(fs.existsSync(f+".pmm")){
+				var str2 = fs.readFileSync(f+".pmm").toString();
+				var ast2 = parse(str2);
+				var func2;
+				if(ast2)
+					func2 = analyze(vcpt.from, ast2);
+				else
+					func2 = newcpt(vcpt, "Function");
+				func._pseudo = func2;
+			}
+		}else if(fs.existsSync(f+".tpl")){
+			var str = fs.readFileSync(f+".tpl").toString();
+			var funccpt = newcpt(vcpt, "Function");//Render
+			funccpt.block = [
+				newcall(gc(rootns, "render", {limit:2}), [raw2cpt(vcpt, str), analyze(rootns, ['_id', "$0"])])
 //			newcall(gc(rootns, "render", {limit:2}), [raw2cpt(vcpt, str)])
-		]
-		rcpt = newref(vcpt, key, funccpt);
-		rcpt._old = 1;
-	}else if(fs.existsSync(f3)){
-		var str = fs.readFileSync(f3).toString();
-		rcpt = raw2cpt(vcpt, str);
+			]
+			rcpt = newref(vcpt, key, funccpt);
+			rcpt._old = 1;
+		}else if(fs.existsSync(f+".str")){
+			var str = fs.readFileSync(f+".str").toString();
+			rcpt = raw2cpt(vcpt, str);
+		}
 	}
-
 	if(config.assignable){
 		if(rcpt) return rcpt;
 		return newref(vcpt, key);
@@ -365,9 +362,6 @@ function analyze(ns, ast, mainflag){
 
 		case "_normalcall":
 		var callcpt = analyze(ns, e);
-/*		if(!callcpt){
-			cpt = undefined;
-		}else */
 		if(!isproto(callcpt, "Call")){
 			cpt = newcall(gc(ns, "return", {limit:2}), [callcpt]);
 		}else{
@@ -501,14 +495,6 @@ function analyze(ns, ast, mainflag){
 }
 
 
-function archive(){
-	for(var key in topersist){
-		var cpt = topersist[key];
-		if(cpt.path.match(/\$/))
-			continue;
-//		subarchive(cpt);
-	}
-}
 
 function cpt2str(cpt){
 	return "";

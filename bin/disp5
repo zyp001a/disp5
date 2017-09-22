@@ -36,7 +36,7 @@ switch(cmd){
 			context.gen = 1;
 //			if(!context.arch) context.arch = "nodejsArch";
 			if(!context.arch) context.arch = "serverArch";
-			if(!context.mount) context.mount = "gen";
+			if(!context.mount) context.mount = arg1.replace("\.mm", "")+".gen";
 		}
 	}
 	d(context);	
@@ -46,7 +46,6 @@ switch(cmd){
 	context.code = args;
 	d(context);
 	break;
-
 	
 	case "help":
 	console.log("Basic usage: disp run [file]");
