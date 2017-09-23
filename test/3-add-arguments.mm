@@ -1,4 +1,6 @@
-b = :{print $0;print $1;}
-a = :{$0}
-print (a 1)
+b = :(x,y){print x;print y;}
+a = :(x){x.1=1}
+c = {}
+a c;
+print c.1
 b 1
