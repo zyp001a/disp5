@@ -1,1 +1,1 @@
-`return gc($[0], $$[1], {notlocal:1})`
+`return gc($[0], $$[1])`

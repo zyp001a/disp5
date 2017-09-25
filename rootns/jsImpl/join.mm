@@ -1,13 +1,17 @@
 `
 var str= "";
 var sep = $$[1];
-for(var i in $$[0]){
- var x = _getref($$[0][i])
+var arr = _getref($[0])
+for(var i=0; i<arr._length; i++){
+ var x = _getref(arr.ref[i])
+ var v;
  if(!x){
-  continue;
+  v= ""
+ }else{
+  v=x.value
  }
- str += x.value
- if(x.value != "" && i != $$[0].length - 1){
+ str += v
+ if(i != arr._length - 1){
   str += sep
  }
 }

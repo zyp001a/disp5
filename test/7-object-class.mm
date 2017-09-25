@@ -1,6 +1,5 @@
-Tmp = proto {
- x = 80
+a = {
+ x := 1
 }
-a = new Tmp {}
 vardump a
 print (a.x)

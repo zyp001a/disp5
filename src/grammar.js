@@ -15,14 +15,14 @@ var grammar = {
     "rules": [
 			["{sp}\`(\\.|[^\\\`])*\`{sp}", 
 			 "yytext = yytext.replace(/^\\s*\`/, '').replace(/\`\\s*$/, ''); return 'NATIVE';"],
+			["\\/\\*[\\S\\s]*\\*\\/", "return;"],//COMMENT
+			["\\#[^\\n\\r]+[\\n\\r]*", "return;"],//COMMENT
+			["\\\/\\\/[^\\n\\r]+[\\n\\r]*", "return;"],//COMMENT
 			["{sp}\"(\\.|[^\\\"])*\"{sp}", 
 			 "yytext = yytext.replace(/^\\s*\"/, '').replace(/\"\\s*$/, ''); return 'STRING';"],
 			["{sp}\'(\\.|[^\\\'])*\'{sp}",
        "yytext = yytext.replace(/^\\s*\'/, '').replace(/\'\\s*$/, ''); return 'STRING';"],
-      ["{sp}\\\\[\\r\\n;]+{sp}", "return"],
-			["\\/\\*[\\S\\s]*\\*\\/", "return;"],//COMMENT
-			["\\#[^\\n\\r]+[\\n\\r]*", "return;"],//COMMENT
-			["\\\/\\\/[^\\n\\r]+[\\n\\r]*", "return;"],//COMMENT
+      ["{sp}\\\\[\\r\\n;]+{sp}", "return"],//allow \ at end of line
       ["{sp}{int}{frac}?{exp}?\\b{sp}",
 			 "yytext = yytext.replace(/\\s/g, ''); return 'NUMBER';"],
 			["{sp}\\$?{letter}({letter}|{digit})*{sp}", 
@@ -112,7 +112,8 @@ var grammar = {
 			["Id", "$$ = $1"],
 			["STRING", "$$ = ['_string', $1]"],
 			["NUMBER", "$$ = ['_number', Number($1)]"],
-			["& Id", "$$ = ['_getrepr', $2]"]
+			["& Id", "$$ = ['_getrepr', $2]"],
+			["& ( Exp )", "$$ = ['_getrepr', $3]"]
 		],
 		"Lss": [
 			["L", "$$ = [$1]"], //newcall
@@ -171,7 +172,7 @@ var grammar = {
 			["Exp != Exp", "$$ = ['_newcall', [['_id', 'ne'], $1, $3]]"],
 			["Exp > Exp", "$$ = ['_newcall', [['_id', 'gt'], $1, $3]]"],
 			["Exp < Exp", "$$ = ['_newcall', [['_id', 'lt'], $1, $3]]"],
-			["ID := Exp", "$$ = ['_newcall', [['_id', 'setp'], $3, ['_local', '$1']]]"],
+			["ID := Exp", "$$ = ['_newcall', [['_id', 'setp'], $3, ['_local', $1]]]"],
 			["GetOp", "$$ = $1"]
 		],
 		"ExpUnit": [

@@ -9,7 +9,10 @@ var rootns = rawcpt("rootns");
 rootns._isroot = 1;
 rootns.file = "";
 rootns.path = "";
-newref(rootns, "global", rootns);
+rootns.global = rootns;
+var globalenv = _getref(gc(rootns, "global", {initref:1}));
+newref(rootns, "rootns", rootns)
+globalenv.global = globalenv;
 //rootns.ref.rootns = rootns;
 //rootns.ref.Ref = Ref;
 //rootns.from = rootns;
@@ -24,17 +27,18 @@ setlink(rootns, gc(rootns, "web", {initref:1}));
 //var tplcache = {};
 //var codecache = {};
 //var topersist= {};
+
 module.exports = function(config, fn){
 	console.error("#Disp version: "+ version);
-	var ast = parse(config.code);
+
 	if(config.trans){
 		var str = render(config.code, rootns);
 		console.error("write: "+config.outfile)
 		fs.writeFileSync(config.outfile, str);
 		return;
 	}
-	var tree, mount, arch;
-	var env = newcpt(rootns);
+	var ast = parse(config.code);
+	var tree, mount, arch, pseudo;
 	if(config.gen){
 		mount = gc(rootns, "mount", {initref:1});
 		mount.value.file = config.mount;
@@ -42,27 +46,24 @@ module.exports = function(config, fn){
 		var pre = gc(arch, "pre");
 		tree = gc(arch, "tree");
 		docall(newcall(pre), rootns);
-		newref(env, "pseudo")
+		pseudo = 1;
 	}
 //make argcpt
-	var argcpt = newcpt(rootns, "Array");
 	var argarr = [];
 	for(var i=1; i<process.argv.length; i++){
 		var subargcpt = raw2cpt(process.argv[i]);
-//newcall(gc(rootns, "raw", {notlocal: 1}), [raw2cpt(process.argv[i])]);
 		argarr.push(subargcpt);
 	}
-	argcpt.value = argarr;
-
+//	var argcpt = newarr(rootns, argarr);
+	var argcpt = newcall(gc(rootns, "array", {notlocal: 1}), argarr);
 //make main
-	var mainfunc = analyze(env, ast, 1);
+	var mainfunc = analyze(globalenv, ast, 1);
 	var maincpt = newref(rootns, "main", mainfunc);
 //call
 	var call = newcall(gc(rootns, "call", {notlocal: 1}), [maincpt, argcpt]);
-	var result = docall(call, env);
+	var result = docall(call, globalenv, pseudo);
 // gen
 	if(config.gen){
-//		console.log(pseudomain)
 		docall(newcall(tree), rootns);
 		for(var f in mount.value.ref){
 			var fcpt = mount.value.ref[f];
@@ -73,21 +74,17 @@ module.exports = function(config, fn){
 		}
 	}
 }
-function pseudocall(tcall, env){
-	var newenv = newcpt(env);
-  newref(newenv, "pseudo");
-	docall(tcall, newenv);
-	return newenv.ns.Env.$Env0;
-}
-function _eval(code, env){
+
+function _eval(code, env, pseudo){
 	code = "{" + code + "}";
 	var ast = parse(code);
+
 	var func = analyze(rootns, ast);
 	var currenv = newcpt(rootns);
 	if(env.ref.args)
 		currenv.ref.args = env.ref.args
 	newref(currenv, "env", env);
-	var result = doexec(func, currenv);
+	var result = doexec(func, currenv, pseudo);
 	return result;
 }
 /*
@@ -98,9 +95,15 @@ initref?
 */
 function gc(cpt, key, config, history){
 	if(!cpt) die("gc: " +key+", cpt undefined")
+	var vcpt = _getref(cpt);
+//	if(!history) console.log("!!!!"+key);
+//	else console.log(":"+cpt.file+"\t"+vcpt.path);
+
+
 	if(!config) config = {};
 	if(!history) history = {};
-	var vcpt = _getref(cpt);
+
+
 	if(!vcpt) {
 		console.error(cpt)
 		console.error(vcpt)
@@ -112,13 +115,13 @@ function gc(cpt, key, config, history){
 		return vcpt.ref[key];
 	}
 //Array return by value
-	if((isproto(vcpt, "Array") || isproto(vcpt, "String")) && Number(key) >=0){
-		return vcpt.value[key];
-	}
+//	if((isproto(vcpt, "Array") || isproto(vcpt, "String")) && Number(key) >=0){
+//		return vcpt.value[key];
+//	}
 	var rcpt, pns;
 	for(var gcpathi in gcpath){
 		var gcpathe = gcpath[gcpathi];
-		var f = __dirname + "/../"+ gcpathe + vcpt.file + "/" + key;
+		var f = __dirname + "/../"+ gcpathe + cpt.file + "/" + key;
 		if(fs.existsSync(f+".mm")){
 			var str = fs.readFileSync(f+".mm").toString();
 			var ast = parse(str);
@@ -143,8 +146,7 @@ function gc(cpt, key, config, history){
 			var str = fs.readFileSync(f+".tpl").toString();
 			var funccpt = newcpt(vcpt, "Function");//Render
 			funccpt.block = [
-				newcall(gc(rootns, "render", {notlocal: 1}), [raw2cpt(str), analyze(rootns, ['_id', "$0"])])
-//			newcall(gc(rootns, "render", {notlocal: 1}), [raw2cpt(vcpt, str)])
+				newcall(gc(rootns, "make", {notlocal: 1}), [raw2cpt(str)])
 			]
 			rcpt = newref(vcpt, key, funccpt);
 			rcpt._old = 1;
@@ -157,8 +159,8 @@ function gc(cpt, key, config, history){
 		if(rcpt || config.notnew) return rcpt;
 		rcpt = newref(vcpt, key);
 		if(config.initref){
-			rcpt.value = newcpt(vcpt)
-			rcpt.value.file = vcpt.file +"/" + key
+			rcpt.value = newcpt(vcpt);
+			rcpt.value.file = vcpt.file +"/" + key;
 		}
 		return rcpt;
 	}
@@ -206,10 +208,10 @@ function gc(cpt, key, config, history){
 		return rcpt;
 
 	if(!rcpt){
-		rcpt = newref(rootns, key);
+		rcpt = newref(cpt.global, key);
 		if(config.initref){
-			rcpt.value = newcpt(rootns)
-			rcpt.value.file = rootns.file +"/" + key
+			rcpt.value = newcpt(cpt.global)
+			rcpt.value.file = cpt.global.file +"/" + key
 		}
 	}else{
 		if(_getref(rcpt)){
@@ -229,16 +231,19 @@ function raw2cpt(raw){
 	if(typeof raw == "string"){
 		var strcpt = newcpt(rootns, "String");
 		strcpt.value = raw;
+		strcpt._raw = 1;
 		return strcpt;
 	}
 	if(typeof raw == "number"){
 		var strcpt = newcpt(rootns, "Number");
 		strcpt.value = raw;
+		strcpt._raw = 1;
 		return strcpt;
 	}
 	if(typeof raw == "boolean"){
 		var strcpt = newcpt(rootns, "Boolean");
 		strcpt.value = raw;
+		strcpt._raw = 1;
 		return strcpt;
 	}
 	return raw;
@@ -276,6 +281,9 @@ function isparent(cpt, tarkey){
 
 function assign(left, right){
 	left._new = 1;
+	if(left.from._length && Number(left.name) > left.from._length - 1)
+		left.from._length = Number(left.name) + 1;
+		
 	left.value = right;
 }
 function setparent(cpt, pcpt){
@@ -320,7 +328,7 @@ function newcall(refcpt, argarr){
 	return cpt;
 }
 function analyze(ns, ast, mainflag){
-
+	
 	var c = ast[0];
 	var e = ast[1];
 	var cpt;
@@ -330,6 +338,7 @@ function analyze(ns, ast, mainflag){
 		case "_block":
 		var proto = ast[2] || "Hash";
 		cpt = newcpt(ns, proto);
+		cpt._raw = 1;
 /*
 		var initfunc = gc(ns, "init"+proto, {notlocal: 1, notnew:1});
 		if(initfunc)
@@ -346,22 +355,17 @@ function analyze(ns, ast, mainflag){
 			newref(cpt, "argsDef", ast[3]);
 		}
 		if(mainflag) cpt._main = 1;
-		var makefunc = gc(ns, "make"+proto, {notlocal: 1, notnew:1});
-		if(makefunc){
-			var strcpt = docall(newcall(makefunc, [cpt]), rootenv).value;
-			if(strcpt){
-				cpt.repr = strcpt;
-			}
-		}
 		break;
 
 		case "_string":
 		cpt = newcpt(ns, "String");
+		cpt._raw = 1;
 		cpt.value = e;
 		break;
 
 		case "_number":
 		cpt = newcpt(ns, "Number");
+		cpt._raw = 1;
 		cpt.value = e;
 // broke return mechnism
 //		cpt = newcall(gc(ns, "raw", {notlocal: 1}), [raw2cpt(e)]);
@@ -369,15 +373,8 @@ function analyze(ns, ast, mainflag){
 
 		case "_native":
 		cpt = newcpt(ns, "Native");
+		cpt._raw = 1;
 		cpt.value = e;
-		break;
-
-		case "_array":
-		cpt = newcpt(ns, "Array");
-		cpt.value = [];
-		for(var i in e){
-			cpt.value.push(analyze(ns, e[i]));
-		}
 		break;
 
 
@@ -392,6 +389,9 @@ function analyze(ns, ast, mainflag){
 		var callcpt = analyze(ns, e);
 		if(!isproto(callcpt, "Call")){
 			cpt = newcall(gc(ns, "return", {notlocal: 1}), [callcpt]);
+/*		}
+else if(isproto(callcpt.call[0], "Precall")){
+*/		
 		}else{
 			cpt = callcpt;
 		}
@@ -399,40 +399,48 @@ function analyze(ns, ast, mainflag){
 
 		case "_newcall"://action
 		var fcpt = analyze(ns, e[0]);
-		if(e.length > 1){
-//			if(assignablelist[fcpt.name]){
-//				e[1].assignable = 1;
-//			}
-			var argarr = [];
-			for(var i=1; i<e.length; i++){
-				var argcpt	= analyze(ns, e[i]);
-				argarr.push(argcpt);
-			}
-			if(fcpt._new || 
-				 (!isproto(fcpt, "Function") && !isproto(fcpt, "Native")) ){
-//user defined function
-				var callcpt = gc(ns, "call", {notlocal: 1});
-				var argcpt = newcpt(ns, "Array");
-				argcpt.value = argarr;
-				cpt = newcall(callcpt, [fcpt, argcpt]);
-			}else{
-//predefined function
-				if(isproto(fcpt, "Precall")){
-					argarr.unshift(ns);
-					cpt = docall(newcall(fcpt, argarr), ns);
-				}else{
-					cpt = newcall(fcpt, argarr);
-				}
-			}
-		}else{
+		if(e.length <= 1){
 			die("error, newcall")
-			cpt = fcpt;
+		}
+		var argarr = [];
+		for(var i=1; i<e.length; i++){
+			var argcpt	= analyze(ns, e[i]);
+			argarr.push(argcpt);
+		}
+		if(fcpt._new || 
+			 (!isproto(fcpt, "Function") && !isproto(fcpt, "Native")) ){
+//user defined function
+			var callcpt = gc(ns, "call", {notlocal: 1});
+			
+			var argcpt = newarr(ns, argarr);
+			cpt = newcall(callcpt, [fcpt, argcpt]);
+		}else{
+//predefined function
+			if(isproto(fcpt, "Precall")){
+				argarr.unshift(ns);
+				cpt = docall(newcall(fcpt, argarr), ns);
+			}else{
+				cpt = newcall(fcpt, argarr);
+			}
 		}
 		break;
 
 		case "_getid":
 		cpt = newcall(gc(ns, "id", {notlocal: 1}), [analyze(ns, e)]);
 		break;
+
+		case "_getrepr":
+		cpt = newcall(gc(ns, "repr", {notlocal: 1}), [analyze(ns, e)]);
+		break;
+
+		case "_array":
+		var rawarr = [];
+		for(var i in e){
+			rawarr.push(analyze(ns, e[i]));
+		}
+		cpt = newcall(gc(ns, "array", {notlocal: 1}), rawarr);
+		break;
+
 
 		case "_id":
 		cpt = gc(ns, e, {notlocal: 1});
@@ -482,7 +490,7 @@ function _get(cpt, tar){
 	}
 		
 }
-function callnative(env, func, argvp){
+function callnative(env, func, argvp, pseudo){
 	var v = func.value;
 	var ns = {
 		assign: assign,
@@ -509,15 +517,12 @@ function callnative(env, func, argvp){
 			ns.$$[key] = undefined;
 		}
 	}
-//	console.log(v)
 	var result;
 	try{
 		with(ns){
 			result = eval("(function(){"+v+"})()");
 		}
 	}catch(err){
-//		console.error(ns.$);
-//		console.error(func);
 		console.error(v);
 		with(ns){
 			eval("(function(){"+v+"})()");
@@ -527,56 +532,54 @@ function callnative(env, func, argvp){
 	return result;
 }
 
-function procarg(arg, ns){
+function procarg(arg, ns, pseudo){
 	if(isproto(arg, "Call")){
-		return docall(arg, ns).value;
-	}else if(isproto(arg, "Array")){
-		var res = newcpt(arg, "Array");
-		res.value = [];
-		for(var j in arg.value){
-			res.value[j] = procarg(arg.value[j], ns);
-		}
-		res._origin = arg;
-		return res;
+		return docall(arg, ns, pseudo);
 	}else{
 		return arg;
-	}	
+	}
 }
-function doexec(funcref, env){
+
+function doexec(funcref, env, pseudo){
 	var func = _getref(funcref);
-	func.cpt = [];
+//	func.cpt = [];
 	var result;
 	var step = _get(func, "block");
 	for(var i in step){
 		var scpt = step[i];
-		var tmpcpt = docall(scpt, env);
-		func.cpt.push(tmpcpt.value);
+		var tmpcpt = docall(scpt, env, pseudo);
 		result = tmpcpt;
 		
-		if(tmpcpt.value.name == "break" || tmpcpt.value.name == "continue"){
+		if(isproto(tmpcpt, "Break") || isproto(tmpcpt, "Continue")){
 			return result;
 		}
 	}
 	return result;
 }
-function docall(cpt, env){
+function docall(cpt, env, pseudo, notdoarg){
+
+	if(!isproto(cpt, "Call")){
+		console.log(cpt);
+		die("docall: unknown call type");
+	}
 	var tcall = _get(cpt, "call");
 	if(!tcall){
 		console.error(cpt)
 		die("wrong call")
 	}
-	var pseudo = gc(env, "pseudo", {notlocal:1, notnew:1})
-
 	var func = _getref(tcall[0]);
 	if(pseudo && func._pseudo){
 		func = func._pseudo;
 	}
-	
-
 	var argv = tcall[1];
-	var argvp = [];
-	for(var i in argv){
-		argvp[i] = procarg(argv[i], env);
+	var argvp;
+	if(notdoarg){
+		argvp = argv;
+	}else{
+		argvp = [];
+		for(var i in argv){
+			argvp[i] = procarg(argv[i], env, pseudo);
+		}
 	}
 //	setparent(env, func);
 
@@ -588,9 +591,10 @@ function docall(cpt, env){
 			printstr += argvp[i].path + ",";
 		}
 	}
-	console.error(tcall[0].name, ": "+printstr);
-	cpt.cpt = [];
+//	console.error("docall: "+tcall[0].name + "("+printstr+")");
+//	cpt.cpt = [];
 	var result;
+
 	if(!isproto(func, "Function") && !isproto(func, "Native")){
 		console.error(func)
 		die("docall: not Function or Native")
@@ -599,29 +603,32 @@ function docall(cpt, env){
 	setparent(newenv, env);
 	setparent(newenv, func);
 
-	var argcpt = newcpt(cpt, "Array");
-	argcpt.value = argvp;
+	var argcpt = newarr(cpt, argvp);
 	newref(newenv, 'args', argcpt);
 	newref(newenv, "func", func);
-		
+
 	if(isproto(func, "Native")){
-		var resultstr = callnative(newenv, func, argvp);
+
+		var resultstr = callnative(newenv, func, argvp, pseudo);
 		if(typeof resultstr != "object")
 			result = raw2cpt(resultstr);
 		else
 			result = resultstr;
-		cpt.cpt.push(result.value);
 	}else if(isproto(func, "Function")){
 		var argsDef = gc(func, "argsDef").value;
+//		if(tcall[0].name == "print"){
+//			console.log(tcall[0].name);
+//			console.log(argvp);
+//		}
 		for(var i in argsDef){
 			newref(newenv, argsDef[i], argvp[i]);
 		}
 		var step = _get(func, "block");
 		for(var i in step){
 			var scpt = step[i];
-			var tmpcpt = docall(scpt, newenv);
-			cpt.cpt.push(tmpcpt.value);
-			if(tmpcpt.call[0].name == "return"){
+			var tmpcpt = docall(scpt, newenv, pseudo);
+//			cpt.cpt.push(tmpcpt.value);
+			if(isproto(tmpcpt, "Return")){
 				result = tmpcpt.value;
   			break;
 			}else{
@@ -631,25 +638,42 @@ function docall(cpt, env){
 		if(!result) result = raw2cpt(cpt)
 	}
 
-	if(isproto(result, "Call"))
-		cpt.value = result.value;
-	else
-		cpt.value = result;
+//	if(isproto(result, "Call"))
+//		cpt.value = result.value;
+//	else
+	cpt.value = result;
 
-	if(pseudo){
-		dogen(tcall[0], func, argvp, env);
+	if(pseudo && !func._make && tcall[0].name != "make"){
+		cpt.repr = dogen(tcall[0], func, argv, env);
 	}
-	return cpt;
+	return result;
 }
-function dogen(ref, func, argvp, env){
-
-
+function dogen(ref, func, argv, env){
+	for(var i in argv){
+		var arg = argv[i];
+		if(!isproto(arg, "Call")){
+			var rarg = _getref(arg);
+			if(!rarg._raw){
+				console.error(rarg);
+				console.error(ref.name);
+				die("dogen: arg error");	
+			}
+			var pproto = Object.keys(rarg.proto)[0];
+			var makefuncref = gc(env, "make"+pproto, {notlocal: 1, notnew:1});
+			if(makefuncref){
+				var strcpt = docall(newcall(makefuncref, [rarg]), env, 0, 1);
+				if(strcpt){
+					rarg.repr = strcpt.value;
+				}
+			}
+		}
+	}
 	var repr;
 	if(isproto(func, "Native")){
-		var makefunc = gc(env, "make"+ref.name, {notlocal: 1, notnew:1});
-		if(makefunc){
-			var strcpt = docall(newcall(makefunc, argvp), env).value;
-			repr = docall(newcall(gc("make" + ref.name)));
+		var makefuncref = gc(env, "make"+ref.name, {notlocal: 1, notnew:1});
+		if(makefuncref){
+			var strcpt = docall(newcall(makefuncref, argv), env, 0, 1);
+			repr = strcpt.value;
 		}else{
 			die("dogen: no make"+ref.name)
 		}
@@ -711,6 +735,16 @@ function newref(ns, key, ref){
 	refcpt.value = ref;
 	return refcpt;
 }
+
+function newarr(ns, argarr){
+	var argcpt = newcpt(rootns, "Array");
+	for(var i in argarr){
+		newref(argcpt, i, argarr[i]);		
+	}
+	argcpt._length = argarr.length;
+	return argcpt;
+}
+
 function newcpt(ns, proto){
 	var protocpt;
 	if(!proto){
@@ -730,10 +764,9 @@ function newcpt(ns, proto){
 	cpt.path = ns.path  + "/" + name;
 	cpt.file = ns.file;
 	cpt.from = ns;
-//	newref(cpt, "self", cpt)
 	if(proto != "Cpt")
 		cpt.proto[proto] = protocpt;
-//	if(proto == "Function" || proto == "Ns")
+	cpt.global = ns.global;
 	return cpt;
 }
 
@@ -794,7 +827,6 @@ function render(str, env){
 		die("render error not env")
 	};
 	var win, wout;
-
 //		newref(mainfunc, "env", env);
 	var evalstr = "arrayDump=[];push arrayDump '";
 	var originstr = str.replace(/\r/g,"");
@@ -830,6 +862,9 @@ function render(str, env){
 		}
 	});
 	evalstr+="';join arrayDump ''";
-	var res = _get(_getref(_eval(evalstr, env).value), 'value');
-	return res;
+//	console.error(evalstr);
+	var res = _eval(evalstr, env);
+
+//	var res = _get(_getref(_eval(evalstr, env).value), 'value');
+	return res.value;
 }

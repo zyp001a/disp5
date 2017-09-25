@@ -1,13 +1,11 @@
 `
 var fcpt = $[0];
-var res = docall(newcall(fcpt), global);
 var str = ""
-for(var varname in fcpt.ref){
- if(varname != "self")
+for(var varname in ns.global.ref){
   str += "var "+ varname +";\n";
 }
-for(var i in res.cpt){
- var v = res.cpt[i].value;
+for(var i in fcpt.block){
+ var v = fcpt.block[i].repr;
  if(v)
   str += v + ";\n";
  else

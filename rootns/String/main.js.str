@@ -1,4 +1,4 @@
-^^for a (global.require) {$$
+^^for a (rootns.require) {$$
 var ^^=(hyphen2uc a)$$ = require("^^=a$$");
 ^^}$$
-^^=main$$
+^^=&main$$
