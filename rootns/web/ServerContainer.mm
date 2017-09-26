@@ -1,3 +1,3 @@
 {
- setp start :{ print "Pseudo: server start"}
+ start := :{ print "Pseudo: server start"}
 }

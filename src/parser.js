@@ -171,7 +171,7 @@ case 37:
 this.$ = ['_newcall', [['_id', 'assign'], $$[$0], $$[$0-2]]]
 break;
 case 38:
-this.$ = ['_newcall', [['_id', 'add'], $$[$0-2], $$[$0]]]
+this.$ = ['_newcall', [['_id', 'plus'], $$[$0-2], $$[$0]]]
 break;
 case 39:
 this.$ = ['_newcall', [['_id', 'minus'], $$[$0-2], $$[$0]]]
@@ -183,7 +183,7 @@ case 41:
 this.$ = ['_newcall', [['_id', 'obelus'], $$[$0-2], $$[$0]]]
 break;
 case 42:
-this.$ = ['_newcall', [['_id', 'assign'], ['_newcall', [['_id', 'add'], $$[$0-2], $$[$0]]], $$[$0-2]]]
+this.$ = ['_newcall', [['_id', 'assign'], ['_newcall', [['_id', 'plus'], $$[$0-2], $$[$0]]], $$[$0-2]]]
 break;
 case 43:
 this.$ = ['_newcall', [['_id', 'ge'], $$[$0-2], $$[$0]]]

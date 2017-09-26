@@ -1,4 +1,4 @@
 ^^
-global.require.express = 1;
+require.express = 1;
 $$
 express()

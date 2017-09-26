@@ -161,11 +161,11 @@ var grammar = {
 		"Op": [
 			["! Exp", "$$ = ['_newcall', [['_id', 'not'], $2]]"],
 			["Exp = Exp", "$$ = ['_newcall', [['_id', 'assign'], $3, $1]]"],
-			["Exp + Exp", "$$ = ['_newcall', [['_id', 'add'], $1, $3]]"],
+			["Exp + Exp", "$$ = ['_newcall', [['_id', 'plus'], $1, $3]]"],
 			["Exp - Exp", "$$ = ['_newcall', [['_id', 'minus'], $1, $3]]"],
 			["Exp * Exp", "$$ = ['_newcall', [['_id', 'times'], $1, $3]]"],
 			["Exp / Exp", "$$ = ['_newcall', [['_id', 'obelus'], $1, $3]]"],
-			["Exp += Exp", "$$ = ['_newcall', [['_id', 'assign'], ['_newcall', [['_id', 'add'], $1, $3]], $1]]"],
+			["Exp += Exp", "$$ = ['_newcall', [['_id', 'assign'], ['_newcall', [['_id', 'plus'], $1, $3]], $1]]"],
 			["Exp >= Exp", "$$ = ['_newcall', [['_id', 'ge'], $1, $3]]"],
 			["Exp <= Exp", "$$ = ['_newcall', [['_id', 'le'], $1, $3]]"],
 			["Exp == Exp", "$$ = ['_newcall', [['_id', 'eq'], $1, $3]]"],

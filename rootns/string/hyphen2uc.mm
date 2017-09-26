@@ -1,7 +1,7 @@
-:{
- r = ""
- flag = 0
- forarr a $0 {
+:(x){
+ @r = ""
+ @flag = 0
+ forstr @a x {
   if (a == '-') {
    flag = 1
   }{

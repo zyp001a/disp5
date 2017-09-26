@@ -155,43 +155,35 @@ function gc(cpt, key, config, history){
 			rcpt = raw2cpt(str);
 		}
 	}
-	if(!config.notlocal){//local
-		if(rcpt || config.notnew) return rcpt;
-		rcpt = newref(vcpt, key);
-		if(config.initref){
-			rcpt.value = newcpt(vcpt);
-			rcpt.value.file = vcpt.file +"/" + key;
-		}
-		return rcpt;
-	}
-
 //record vcpt into history
 	history[vcpt.path] = 1;
-	if(!rcpt){
-		for(var p in vcpt.link){
-			rcpt = gc(vcpt.link[p], key, {
-				notlocal: 1,
-				notnew: 1
-			}, history);
-			if(rcpt){
-				break;
+	if(config.notlocal){//not local
+		if(!rcpt){
+			for(var p in vcpt.link){
+				rcpt = gc(vcpt.link[p], key, {
+					notlocal: 1,
+					notnew: 1
+				}, history);
+				if(rcpt){
+					break;
+				}
 			}
 		}
-	}
-	if(!rcpt && !vcpt._isroot){
-		for(var p in vcpt.parent){
-			rcpt = gc(vcpt.parent[p], key, {
-				notlocal: 1,
-				notnew: 1
-			}, history);
-			if(rcpt)
-				break;
-		}
-		if(!rcpt && !cpt._isroot){
-			rcpt = gc(cpt.from, key, {
-				notlocal: 1,
-				notnew: 1
-			}, history);
+		if(!rcpt && !vcpt._isroot){
+			for(var p in vcpt.parent){
+				rcpt = gc(vcpt.parent[p], key, {
+					notlocal: 1,
+					notnew: 1
+				}, history);
+				if(rcpt)
+					break;
+			}
+			if(!rcpt && !cpt._isroot){
+				rcpt = gc(cpt.from, key, {
+					notlocal: 1,
+					notnew: 1
+				}, history);
+			}
 		}
 	}
 	if(!rcpt){
@@ -208,10 +200,15 @@ function gc(cpt, key, config, history){
 		return rcpt;
 
 	if(!rcpt){
-		rcpt = newref(cpt.global, key);
+		var newenv;
+		if(config.notlocal)
+			newenv = cpt.global;
+		else
+			newenv = vcpt;
+		rcpt = newref(newenv, key);
 		if(config.initref){
-			rcpt.value = newcpt(cpt.global)
-			rcpt.value.file = cpt.global.file +"/" + key
+			rcpt.value = newcpt(newenv);
+			rcpt.value.file = newenv.file +"/" + key;
 		}
 	}else{
 		if(_getref(rcpt)){
@@ -567,9 +564,12 @@ function docall(cpt, env, pseudo, notdoarg){
 		console.error(cpt)
 		die("wrong call")
 	}
-	var func = _getref(tcall[0]);
-	if(pseudo && func._pseudo){
-		func = func._pseudo;
+	var orifunc = _getref(tcall[0]);
+	var func;
+	if(pseudo && orifunc._pseudo){
+		func = orifunc._pseudo;
+	}else{
+		func = orifunc
 	}
 	var argv = tcall[1];
 	var argvp;
@@ -591,7 +591,7 @@ function docall(cpt, env, pseudo, notdoarg){
 			printstr += argvp[i].path + ",";
 		}
 	}
-//	console.error("docall: "+tcall[0].name + "("+printstr+")");
+//	console.error("docall: "+tcall[0].name + "("+printstr+")"+pseudo);
 //	cpt.cpt = [];
 	var result;
 
@@ -643,8 +643,8 @@ function docall(cpt, env, pseudo, notdoarg){
 //	else
 	cpt.value = result;
 
-	if(pseudo && !func._make && tcall[0].name != "make"){
-		cpt.repr = dogen(tcall[0], func, argv, env);
+	if(pseudo && !("repr" in cpt)){
+		cpt.repr = dogen(tcall[0], orifunc, argv, env);
 	}
 	return result;
 }
@@ -654,21 +654,27 @@ function dogen(ref, func, argv, env){
 		if(!isproto(arg, "Call")){
 			var rarg = _getref(arg);
 			if(!rarg._raw){
+/*
+				console.error(i);
 				console.error(rarg);
 				console.error(ref.name);
 				die("dogen: arg error");	
-			}
-			var pproto = Object.keys(rarg.proto)[0];
-			var makefuncref = gc(env, "make"+pproto, {notlocal: 1, notnew:1});
-			if(makefuncref){
-				var strcpt = docall(newcall(makefuncref, [rarg]), env, 0, 1);
-				if(strcpt){
-					rarg.repr = strcpt.value;
+do not die!
+*/
+			}else{
+				var pproto = Object.keys(rarg.proto)[0];
+				var makefuncref = gc(env, "make"+pproto, {notlocal: 1, notnew:1});
+				if(makefuncref){
+					var strcpt = docall(newcall(makefuncref, [rarg]), env, 0, 1);
+					if(strcpt){
+						rarg.repr = strcpt.value;
+					}
 				}
 			}
 		}
 	}
 	var repr;
+
 	if(isproto(func, "Native")){
 		var makefuncref = gc(env, "make"+ref.name, {notlocal: 1, notnew:1});
 		if(makefuncref){
