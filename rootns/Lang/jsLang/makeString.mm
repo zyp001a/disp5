@@ -1,3 +1,3 @@
 `
- return '"'+$[0].value.toString()+'"';
+ return '"'+$[0].value.toString().replace(/\\(\S)/, "\\\\$1")+'"';
 `

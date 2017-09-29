@@ -106,7 +106,9 @@ var grammar = {
 		"Id": [
 			["ID", "$$ = ['_id', $1]"],
 			["@ ID", "$$ = ['_local', $2]"],
-			["@! ID", "$$ = ['_notlocal', $2]"],
+			["@ ( Exp )", "$$ = ['_getid', $3, 'local']"],
+			["@ STRING", "$$ = ['_getid', ['_string', $2], 'local']"],
+//			["@! ID", "$$ = ['_notlocal', $2]"], decide to remove
 			["^ ( Exp )", "$$ = ['_getid', $3]"],
 			["^ STRING", "$$ = ['_getid', ['_string', $2]]"]
 		],

@@ -2,6 +2,7 @@ var version = "5.0.0";
 var fs = require("fs");
 var path = require("path");
 var parser = require("./parser");
+var child = require("child_process");
 
 var gcpath = ["custom", "rootns"];
 var rootns = rawcpt("rootns");
@@ -9,10 +10,13 @@ var rootns = rawcpt("rootns");
 rootns._isroot = 1;
 rootns.file = "";
 rootns.path = "";
+rootns._indent = 0;
 rootns.global = rootns;
-var globalenv = _getref(gc(rootns, "global", {initref:1}));
 newref(rootns, "rootns", rootns);
+
+var globalenv = _getref(gc(rootns, "global", {initref:1}));
 globalenv.global = globalenv;
+var funcsenv = _getref(gc(rootns, "funcs", {initref:1}));
 //rootns.ref.rootns = rootns;
 //rootns.ref.Ref = Ref;
 //rootns.from = rootns;
@@ -49,13 +53,15 @@ module.exports = function(config, fn){
 		pseudo = 1;
 	}
 //make argcpt
+	var argappend = "";
 	var argarr = [];
 	for(var i=3; i<process.argv.length; i++){
+		if(i!=3) argappend += " " + process.argv[i];
 		var subargcpt = raw2cpt(process.argv[i]);
 		argarr.push(subargcpt);
 	}
 	argarr.ismain = raw2cpt(1);
-//	var argcpt = newarr(rootns, argarr);
+//	var argcpt = newarr(argarr);
 	var argcpt = newcall(gc(rootns, "array", {notlocal: 1}), argarr);
 //make main
 	var mainfunc = analyze(globalenv, ast, 1);
@@ -73,6 +79,8 @@ module.exports = function(config, fn){
 			console.error("write: "+fcpt.file)
 			fs.writeFileSync(fcpt.file, fcpt.value.value)
 		}
+		console.log("#Exec:")
+		process.stdout.write(child.execSync("node "+config.mount + "/main.js"+ argappend))
 	}
 }
 
@@ -127,7 +135,7 @@ function gc(cpt, key, config, history){
 				var ast = parse(str);
 				var func;
 				if(ast)
-					func = analyze(vcpt.from, ast);
+					func = analyze(vcpt.from || vcpt, ast);
 				else
 					func = newcpt(vcpt, "Function");
 				rcpt = newref(vcpt, key, func);
@@ -326,7 +334,7 @@ function newcall(refcpt, argarr){
 	return cpt;
 }
 function analyze(ns, ast, mainflag){
-	
+	if(!ns) die("analyze: null ns")
 	var c = ast[0];
 	var e = ast[1];
 	var cpt;
@@ -341,6 +349,10 @@ function analyze(ns, ast, mainflag){
 			cpt._main = 1;
 			cpt._indent = 0;
 		}else{
+			if(ns._indent == undefined){
+				console.log(ns)
+				die()
+			}
 			cpt._indent = ns._indent + 1;
 		}
 /*
@@ -355,6 +367,9 @@ function analyze(ns, ast, mainflag){
 				arr.push(argcpt);
 		}
 		cpt.block = arr;
+		var lastcall = arr[arr.length -1];
+		if(proto == "Function" && lastcall.call[0].name != "return")
+			arr[arr.length -1] = newcall(gc(ns, "return", {notlocal: 1}), [lastcall])
 		if(ast[3]){
 			cpt._argsdef = ast[3]
 //			newref(cpt, "argsDef", ast[3]);
@@ -364,7 +379,7 @@ function analyze(ns, ast, mainflag){
 		case "_string":
 		cpt = newcpt(ns, "String");
 		cpt._raw = 1;
-		cpt.value = e;
+		cpt.value = e.replace("\\'", "'").replace("\\\"", "\"").replace("\\n", "\n").replace("\\r", "\r").replace("\\t", "\t");
 		break;
 
 		case "_number":
@@ -408,6 +423,7 @@ else if(isproto(callcpt.call[0], "Precall")){
 		}
 		var argarr = [];
 		for(var i=1; i<e.length; i++){
+
 			var argcpt	= analyze(ns, e[i]);
 			argarr.push(argcpt);
 		}
@@ -416,7 +432,7 @@ else if(isproto(callcpt.call[0], "Precall")){
 //user defined function
 			var callcpt = gc(ns, "call", {notlocal: 1});
 			
-			var argcpt = newarr(ns, argarr);
+			var argcpt = newarr(argarr);
 			cpt = newcall(callcpt, [fcpt, argcpt]);
 		}else{
 //predefined function
@@ -430,7 +446,10 @@ else if(isproto(callcpt.call[0], "Precall")){
 		break;
 
 		case "_getid":
-		cpt = newcall(gc(ns, "id", {notlocal: 1}), [analyze(ns, e)]);
+		if(ast[2] == "local")
+			cpt = newcall(gc(ns, "id"), [analyze(ns, e)]);
+		else
+			cpt = newcall(gc(ns, "id", {notlocal: 1}), [analyze(ns, e)]);
 		break;
 
 		case "_getrepr":
@@ -618,7 +637,7 @@ function docall(cpt, env, pseudo, notdoarg){
 	setparent(newenv, env);
 	setparent(newenv, func);
 
-	var argcpt = newarr(cpt, argvp);
+	var argcpt = newarr(argvp);
 	newref(newenv, 'args', argcpt);
 	newref(newenv, "func", func);
 
@@ -684,6 +703,8 @@ do not die!
 					if(strcpt){
 						rarg.repr = strcpt.value;
 					}
+				}else{
+					die("no make"+pproto)
 				}
 			}
 		}
@@ -699,7 +720,20 @@ do not die!
 			die("dogen: no make"+ref.name)
 		}
 	}else{
-		//
+		//manually make new function and add to funcenv
+		if(func._main) return "";
+		var makefuncref = gc(env, "makecall", {notlocal: 1, notnew:1});
+		var reprcpt = newcpt(env);
+		reprcpt.repr = ref.name;
+		if(!func.repr){
+			func._name = ref.name;
+			var makefuncref2 = gc(env, "makeFunction", {notlocal: 1, notnew:1});
+			var strcpt = docall(newcall(makefuncref2, [func]), env, 0, 1);
+			func.repr = strcpt.value;
+		}
+		newref(funcsenv, ref.name, func);
+		var strcpt = docall(newcall(makefuncref, [reprcpt, newarr(argv)]), env, 0, 1);
+		repr = strcpt.value;
 	}
 	return repr;
 }
@@ -757,10 +791,10 @@ function newref(ns, key, ref){
 	return refcpt;
 }
 
-function newarr(ns, argarr){
+function newarr(argarr){
 	var argcpt = newcpt(rootns, "Array");
 	for(var i in argarr){
-		newref(argcpt, i, argarr[i]);		
+		newref(argcpt, i, raw2cpt(argarr[i]));		
 	}
 	argcpt._length = argarr.length;
 	return argcpt;
@@ -877,7 +911,11 @@ function render(str, env){
 	
 		if(win && win[0] == '='){
 			var ms;
-			evalstr += (win.replace(/^=(.+)/, "';push arrayDump $1; push arrayDump '") + wout);
+			if(win[1] && win[1] == "~"){
+				evalstr += (win.replace(/^=~(.+)/, "';push arrayDump &(args.$1); push arrayDump '") + wout);
+			}else{
+				evalstr += (win.replace(/^=(.+)/, "';push arrayDump $1; push arrayDump '") + wout);
+			}
 		}else{
 			evalstr+=("';"+win+";push arrayDump '"+wout);
 		}

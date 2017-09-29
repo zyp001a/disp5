@@ -26,8 +26,13 @@ var argsDef = "";
 if(fcpt._argsdef){
  argsDef = fcpt._argsdef.join(", ")
 }
-if(!fcpt._main)
+if(fcpt._main){
+
+}else if(fcpt._name){
+ str = "function " + fcpt._name+ "(" + argsDef + "){\n"+str+"}"
+}else{
  str = "function(" + argsDef + "){\n"+str+"}"
+}
 
 return str;
 `

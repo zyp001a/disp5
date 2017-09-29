@@ -168,3 +168,6 @@ function :
 # 9.27
 Almost done, except for class-object. I need to think twice;
 Begin common sense project.
+
+# 9.29
+there is no perfect naming strategy
