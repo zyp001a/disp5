@@ -53,6 +53,7 @@ var grammar = {
 			["{sp}\\&\\&{sp2}", "return '&&'"],
 			["{sp}\\:\\:{sp2}", "return '::'"],
 			["{sp}\\:\\={sp2}", "return ':='"],
+			["{sp}\\@\\!{sp2}", "return '@!'"],
 //      ["{sp}\\${sp}", "return '$'"],
 //      ["{sp}\\>\\>{sp2}", "return '>>'"],
       ["{sp}\\>{sp2}", "return '>'"],
@@ -86,7 +87,7 @@ var grammar = {
     ["left", "&&"],
     ["left", "+", "-"],
     ["left", "*", "/", "%"],
-    ["right", "&", "|", "@", "~", "%"],
+    ["right", "&", "|", "@", "~", "%", "@!"],
     ["right", "!"],
 		["left", ".", ":"]
 	],
@@ -105,6 +106,7 @@ var grammar = {
 		"Id": [
 			["ID", "$$ = ['_id', $1]"],
 			["@ ID", "$$ = ['_local', $2]"],
+			["@! ID", "$$ = ['_notlocal', $2]"],
 			["^ ( Exp )", "$$ = ['_getid', $3]"],
 			["^ STRING", "$$ = ['_getid', ['_string', $2]]"]
 		],
@@ -130,7 +132,7 @@ var grammar = {
 		],
 		"GetOp": [
 			["Id . Key", "$$ = ['_newcall', [['_id', 'get'], $1, $3]]"],
-			["( Exp ) . Key", "$$ = ['_newcall', [['_id', 'get'], $2, $4]]"],
+			["( Exp ) . Key", "$$ = ['_newcall', [['_id', 'get'], $2, $5]]"],
 			["GetOp . Key", "$$ = ['_newcall', [['_id', 'get'], $1, $3]]"]
 		],
 /*

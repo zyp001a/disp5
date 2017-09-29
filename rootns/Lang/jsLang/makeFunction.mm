@@ -1,20 +1,33 @@
 `
 var fcpt = $[0];
 var str = ""
-for(var varname in ns.ref){
-  if(varname == "func" || varname == "args") continue;
-  str += "var "+ varname +";\n";
+var indent = "";
+var i = 0;
+while(i < fcpt._indent){
+ i+=1;
+ indent += "  ";
 }
+for(var varname in fcpt.ref){
+  if(varname == "func" || varname == "args") continue;
+  str += indent + "var "+ varname +";\n";
+}
+
 for(var i in fcpt.block){
  if(! ("repr" in fcpt.block[i]))
   docall(fcpt.block[i], self, 1)
  var v = fcpt.block[i].repr;
+ str += indent;
  if(v)
   str += v + ";\n";
  else
   str += "//\n"
 }
+var argsDef = "";
+if(fcpt._argsdef){
+ argsDef = fcpt._argsdef.join(", ")
+}
 if(!fcpt._main)
- str = "function(args){\n"+str+"}"
+ str = "function(" + argsDef + "){\n"+str+"}"
+
 return str;
 `

@@ -105,3 +105,14 @@ Object
   Call
  Function
 
+
+//fastread
+read
+:specificity 	above limit -> go
+:connectivity max (hub concept) -> go
+
+
+while(getcpt()){
+ get related cpts
+}
+

@@ -164,3 +164,7 @@ id ^
 precall :
 class :
 function :
+
+# 9.27
+Almost done, except for class-object. I need to think twice;
+Begin common sense project.

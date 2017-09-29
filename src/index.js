@@ -11,7 +11,7 @@ rootns.file = "";
 rootns.path = "";
 rootns.global = rootns;
 var globalenv = _getref(gc(rootns, "global", {initref:1}));
-newref(rootns, "rootns", rootns)
+newref(rootns, "rootns", rootns);
 globalenv.global = globalenv;
 //rootns.ref.rootns = rootns;
 //rootns.ref.Ref = Ref;
@@ -50,10 +50,11 @@ module.exports = function(config, fn){
 	}
 //make argcpt
 	var argarr = [];
-	for(var i=1; i<process.argv.length; i++){
+	for(var i=3; i<process.argv.length; i++){
 		var subargcpt = raw2cpt(process.argv[i]);
 		argarr.push(subargcpt);
 	}
+	argarr.ismain = raw2cpt(1);
 //	var argcpt = newarr(rootns, argarr);
 	var argcpt = newcall(gc(rootns, "array", {notlocal: 1}), argarr);
 //make main
@@ -99,10 +100,8 @@ function gc(cpt, key, config, history){
 //	if(!history) console.log("!!!!"+key);
 //	else console.log(":"+cpt.file+"\t"+vcpt.path);
 
-
 	if(!config) config = {};
 	if(!history) history = {};
-
 
 	if(!vcpt) {
 		console.error(cpt)
@@ -111,48 +110,50 @@ function gc(cpt, key, config, history){
 	}
 	if(history[vcpt.path])
 		return;
-	if(key in vcpt.ref){
-		return vcpt.ref[key];
-	}
+	var rcpt, pns;
+	if(!config.excludelocal){
+		if(key in vcpt.ref){
+			return vcpt.ref[key];
+		}
 //Array return by value
 //	if((isproto(vcpt, "Array") || isproto(vcpt, "String")) && Number(key) >=0){
 //		return vcpt.value[key];
 //	}
-	var rcpt, pns;
-	for(var gcpathi in gcpath){
-		var gcpathe = gcpath[gcpathi];
-		var f = __dirname + "/../"+ gcpathe + cpt.file + "/" + key;
-		if(fs.existsSync(f+".mm")){
-			var str = fs.readFileSync(f+".mm").toString();
-			var ast = parse(str);
-			var func;
-			if(ast)
-				func = analyze(vcpt.from, ast);
-			else
-				func = newcpt(vcpt, "Function");
-			rcpt = newref(vcpt, key, func);
-			rcpt._old = 1;
-			if(fs.existsSync(f+".pmm")){
-				var str2 = fs.readFileSync(f+".pmm").toString();
-				var ast2 = parse(str2);
-				var func2;
-				if(ast2)
-					func2 = analyze(vcpt.from, ast2);
+		for(var gcpathi in gcpath){
+			var gcpathe = gcpath[gcpathi];
+			var f = __dirname + "/../"+ gcpathe + cpt.file + "/" + key;
+			if(fs.existsSync(f+".mm")){
+				var str = fs.readFileSync(f+".mm").toString();
+				var ast = parse(str);
+				var func;
+				if(ast)
+					func = analyze(vcpt.from, ast);
 				else
-					func2 = newcpt(vcpt, "Function");
-				func._pseudo = func2;
+					func = newcpt(vcpt, "Function");
+				rcpt = newref(vcpt, key, func);
+				rcpt._old = 1;
+				if(fs.existsSync(f+".pmm")){
+					var str2 = fs.readFileSync(f+".pmm").toString();
+					var ast2 = parse(str2);
+					var func2;
+					if(ast2)
+						func2 = analyze(vcpt.from, ast2);
+					else
+						func2 = newcpt(vcpt, "Function");
+					func._pseudo = func2;
+				}
+			}else if(fs.existsSync(f+".tpl")){
+				var str = fs.readFileSync(f+".tpl").toString();
+				var funccpt = newcpt(vcpt, "Function");//Render
+				funccpt.block = [
+					newcall(gc(rootns, "make", {notlocal: 1}), [raw2cpt(str)])
+				]
+				rcpt = newref(vcpt, key, funccpt);
+				rcpt._old = 1;
+			}else if(fs.existsSync(f+".str")){
+				var str = fs.readFileSync(f+".str").toString();
+				rcpt = raw2cpt(str);
 			}
-		}else if(fs.existsSync(f+".tpl")){
-			var str = fs.readFileSync(f+".tpl").toString();
-			var funccpt = newcpt(vcpt, "Function");//Render
-			funccpt.block = [
-				newcall(gc(rootns, "make", {notlocal: 1}), [raw2cpt(str)])
-			]
-			rcpt = newref(vcpt, key, funccpt);
-			rcpt._old = 1;
-		}else if(fs.existsSync(f+".str")){
-			var str = fs.readFileSync(f+".str").toString();
-			rcpt = raw2cpt(str);
 		}
 	}
 //record vcpt into history
@@ -189,7 +190,7 @@ function gc(cpt, key, config, history){
 	if(!rcpt){
 		for(var p in vcpt.proto){
 			rcpt = gc(vcpt.proto[p], key, {
-				notlocal: 1,
+				notlocal: config.notlocal,
 				notnew: 1
 			}, history);
 			if(rcpt)
@@ -336,6 +337,12 @@ function analyze(ns, ast, mainflag){
 		var proto = ast[2] || "Hash";
 		cpt = newcpt(ns, proto);
 		cpt._raw = 1;
+		if(mainflag){
+			cpt._main = 1;
+			cpt._indent = 0;
+		}else{
+			cpt._indent = ns._indent + 1;
+		}
 /*
 		var initfunc = gc(ns, "init"+proto, {notlocal: 1, notnew:1});
 		if(initfunc)
@@ -349,9 +356,9 @@ function analyze(ns, ast, mainflag){
 		}
 		cpt.block = arr;
 		if(ast[3]){
-			newref(cpt, "argsDef", ast[3]);
+			cpt._argsdef = ast[3]
+//			newref(cpt, "argsDef", ast[3]);
 		}
-		if(mainflag) cpt._main = 1;
 		break;
 
 		case "_string":
@@ -449,7 +456,14 @@ else if(isproto(callcpt.call[0], "Precall")){
 		case "_local":
 		cpt = gc(ns, e);
 		if(!cpt._old){
-			cpt = newcall(gc(ns, "idLocal", {notlocal: 1}), [raw2cpt(e)]);
+			cpt = newcall(gc(ns, "id", {notlocal: 1}), [raw2cpt(e), raw2cpt("local")]);
+		}
+		break;
+
+		case "_notlocal":
+		cpt = gc(ns, e);
+		if(!cpt._old){
+			cpt = newcall(gc(ns, "id", {notlocal: 1}), [raw2cpt(e), raw2cpt("notlocal")]);
 		}
 		break;
 
@@ -490,6 +504,7 @@ function _get(cpt, tar){
 function callnative(env, func, argvp, pseudo){
 	var v = func.value;
 	var ns = {
+/*
 		assign: assign,
 		setproto: setproto,
 		setparent: setparent,
@@ -497,8 +512,8 @@ function callnative(env, func, argvp, pseudo){
 		docall: docall,
 		newcall: newcall,
 		render: render,
-//		gen: gen,
 		gc: gc,
+*/
 		self: env,
 		ns: env.from,
 		$: [],
@@ -615,7 +630,7 @@ function docall(cpt, env, pseudo, notdoarg){
 		else
 			result = resultstr;
 	}else if(isproto(func, "Function")){
-		var argsDef = gc(func, "argsDef").value;
+		var argsDef = func._argsdef;
 //		if(tcall[0].name == "print"){
 //			console.log(tcall[0].name);
 //			console.log(argvp);

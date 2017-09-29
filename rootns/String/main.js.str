@@ -1,4 +1,7 @@
 ^^for a (rootns.require) {$$
 var ^^=(hyphen2uc a)$$ = require("^^=a$$");
 ^^}$$
+var _g_ = {};
+var args = process.argv;
+process.argv.shift();
 ^^=&main$$
